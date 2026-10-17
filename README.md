@@ -95,3 +95,25 @@ alembic/              migraciones
 scripts/              crear admin y datos de ejemplo
 tests/
 ```
+
+## Despliegue en Render
+
+1. Crea una base **PostgreSQL** en Render (New → Postgres) en la misma región que el servicio y copia su **Internal Database URL**.
+2. Crea un **Web Service** desde este repositorio con:
+   - **Build Command:** `pip install -r requirements.txt`
+   - **Start Command:**
+     ```
+     alembic upgrade head && python -m scripts.create_admin --if-none && uvicorn app.main:app --host 0.0.0.0 --port $PORT
+     ```
+3. En **Environment Variables** agrega:
+
+   | Variable | Valor |
+   |---|---|
+   | `DATABASE_URL` | la Internal Database URL de Render (se adapta sola al driver) |
+   | `SECRET_KEY` | una clave larga y aleatoria |
+   | `TIMEZONE` | `America/La_Paz` |
+   | `CURRENCY_SYMBOL` | `Bs` |
+   | `ADMIN_EMAIL` | email del primer administrador |
+   | `ADMIN_PASSWORD` | su contraseña (mín. 8 caracteres) |
+
+En cada arranque se aplican las migraciones. El administrador solo se crea si todavía no existe ninguno, así que cambiar `ADMIN_PASSWORD` después no modifica la contraseña. La versión de Python se fija en `.python-version`.
