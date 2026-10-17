@@ -1,0 +1,1173 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Hair Sist</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>✂️</text></svg>">
+  <link rel="stylesheet" href="/static/css/styles.css">
+</head>
+<body x-data>
+
+<div x-show="!$store.app.ready" class="login-page"><span class="muted">Cargando…</span></div>
+
+<!-- ======================= LOGIN ======================= -->
+<template x-if="$store.app.ready && !$store.app.user">
+  <div class="login-page">
+    <form class="login-card stack" x-data="loginForm" @submit.prevent="submit()">
+      <div class="brand">
+        <div class="brand-logo">✂</div>
+        <div>
+          <div class="brand-name" x-text="$store.app.config?.app_name || 'Hair Sist'"></div>
+          <div class="muted small">Ingresa para continuar</div>
+        </div>
+      </div>
+      <label class="field">Email
+        <input type="email" x-model="email" required autofocus autocomplete="username">
+      </label>
+      <label class="field">Contraseña
+        <input type="password" x-model="password" required autocomplete="current-password">
+      </label>
+      <div class="alert alert-danger" x-show="errorMsg" x-text="errorMsg"></div>
+      <button class="btn btn-primary" :disabled="loading" x-text="loading ? 'Ingresando…' : 'Ingresar'"></button>
+    </form>
+  </div>
+</template>
+
+<!-- ======================= APLICACIÓN ======================= -->
+<template x-if="$store.app.ready && $store.app.user">
+  <div class="layout">
+    <div class="mobile-bar">
+      <button class="btn btn-icon" @click="$store.app.menuOpen = !$store.app.menuOpen">☰</button>
+      <strong x-text="$store.app.config?.app_name"></strong>
+    </div>
+
+    <aside class="sidebar" :class="{ open: $store.app.menuOpen }">
+      <div class="brand">
+        <div class="brand-logo">✂</div>
+        <div class="brand-name">Hair Sist</div>
+      </div>
+      <nav class="nav">
+        <template x-for="item in $store.app.nav" :key="item.route">
+          <a :href="'#/' + item.route" :class="{ active: $store.app.route === item.route }">
+            <span x-html="ICONS[item.route]"></span>
+            <span x-text="item.label"></span>
+          </a>
+        </template>
+      </nav>
+      <div class="sidebar-footer" x-data="passwordForm">
+        <div class="row">
+          <div class="avatar" x-text="Fmt.initials($store.app.user.full_name)"></div>
+          <div class="grow">
+            <div style="font-weight:600" x-text="$store.app.user.full_name"></div>
+            <div class="muted small" x-text="ROLES[$store.app.user.role]"></div>
+          </div>
+        </div>
+        <div class="row" style="margin-top:10px">
+          <button class="btn btn-sm grow" @click="open = true">Contraseña</button>
+          <button class="btn btn-sm grow" @click="$store.app.logout()">Salir</button>
+        </div>
+
+        <template x-if="open">
+          <div class="modal-backdrop" @click.self="open = false">
+            <form class="modal" @submit.prevent="save()">
+              <div class="modal-header"><h2>Cambiar contraseña</h2><button type="button" class="btn btn-ghost btn-icon" @click="open = false">✕</button></div>
+              <div class="modal-body">
+                <label class="field">Contraseña actual<input type="password" x-model="current" required></label>
+                <label class="field">Nueva contraseña (mín. 8 caracteres)<input type="password" x-model="next" minlength="8" maxlength="72" required></label>
+              </div>
+              <div class="modal-footer">
+                <button type="button" class="btn" @click="open = false">Cancelar</button>
+                <button class="btn btn-primary" :disabled="saving">Guardar</button>
+              </div>
+            </form>
+          </div>
+        </template>
+      </div>
+    </aside>
+
+    <main class="main">
+
+      <!-- ======================= AGENDA ======================= -->
+      <template x-if="$store.app.route === 'agenda'">
+        <section x-data="agenda">
+          <div class="page-header">
+            <div class="agenda-toolbar">
+              <button class="btn btn-icon" @click="shift(-1)" title="Día anterior">‹</button>
+              <button class="btn" @click="shift(0)">Hoy</button>
+              <button class="btn btn-icon" @click="shift(1)" title="Día siguiente">›</button>
+              <input type="date" x-model="day" @change="load()" style="width:auto">
+              <span class="agenda-date" x-text="Fmt.dayLong(day)"></span>
+            </div>
+            <button x-show="$store.app.isStaff" class="btn btn-primary" @click="openNew()">+ Nueva cita</button>
+          </div>
+
+          <div class="legend" style="margin-bottom:10px">
+            <span x-show="$store.app.isStaff">Haz clic en un espacio libre para agendar.</span>
+            <span>Las franjas rayadas están fuera del horario del estilista.</span>
+            <span><strong style="color:var(--success)">✓</strong> cobrada</span>
+          </div>
+
+          <div class="card" style="overflow:hidden">
+            <template x-if="!employees.length">
+              <div class="empty">No hay estilistas activos. Créalos en <a href="#/estilistas">Estilistas</a>.</div>
+            </template>
+            <div class="agenda" x-show="employees.length">
+              <div class="agenda-times">
+                <div class="agenda-head"></div>
+                <template x-for="h in hours" :key="h">
+                  <div class="agenda-time-label" x-text="Fmt.hhmm(h)"></div>
+                </template>
+              </div>
+              <template x-for="emp in employees" :key="emp.id">
+                <div class="agenda-col">
+                  <div class="agenda-head">
+                    <span class="dot" :style="`background:${emp.color}`"></span>
+                    <span class="grow" x-text="`${emp.first_name} ${emp.last_name}`"></span>
+                    <span class="badge badge-muted" x-text="apptsOf(emp).filter(a => !['cancelada','no_asistio'].includes(a.status)).length"></span>
+                  </div>
+                  <div class="agenda-body agenda-grid" @click="clickGrid(emp, $event)">
+                    <template x-for="h in hours" :key="h"><div class="agenda-hour"></div></template>
+                    <template x-for="z in offZones(emp)"><div class="agenda-off" :style="z"></div></template>
+                    <template x-if="nowStyle"><div class="agenda-now" :style="nowStyle"></div></template>
+                    <template x-for="a in apptsOf(emp)" :key="a.id">
+                      <div class="appt" :class="'st-' + a.status" :style="apptStyle(a)" @click.stop="openDetail(a)">
+                        <span class="paid" x-show="a.is_paid" title="Cobrada">✓</span>
+                        <div class="appt-title" x-text="`${Fmt.time(a.start_at)} · ${a.client.first_name} ${a.client.last_name}`"></div>
+                        <div class="appt-sub" x-text="a.services.map(s => s.service_name).join(', ')"></div>
+                        <div class="appt-sub" x-text="STATUS[a.status]"></div>
+                      </div>
+                    </template>
+                  </div>
+                </div>
+              </template>
+            </div>
+          </div>
+
+          <!-- Detalle de cita -->
+          <template x-if="detail">
+            <div class="modal-backdrop" @click.self="detail = null" @keydown.escape.window="detail = null">
+              <div class="modal">
+                <div class="modal-header">
+                  <div>
+                    <h2 x-text="`${detail?.client.first_name} ${detail?.client.last_name}`"></h2>
+                    <div class="muted small" x-text="detail?.client.phone || 'Sin teléfono'"></div>
+                  </div>
+                  <div class="row">
+                    <span class="badge badge-pagada" x-show="detail?.is_paid">Cobrada</span>
+                    <span class="badge" :class="'badge-' + detail?.status" x-text="STATUS[detail?.status]"></span>
+                    <button class="btn btn-ghost btn-icon" @click="detail = null">✕</button>
+                  </div>
+                </div>
+                <div class="modal-body">
+                  <dl class="kv">
+                    <dt>Fecha</dt><dd x-text="Fmt.dayLong(Fmt.dayOf(detail?.start_at))"></dd>
+                    <dt>Hora</dt><dd x-text="`${Fmt.time(detail?.start_at)} – ${Fmt.time(detail?.end_at)}`"></dd>
+                    <dt>Estilista</dt><dd x-text="`${detail?.employee.first_name} ${detail?.employee.last_name}`"></dd>
+                    <template x-if="detail?.notes"><dt>Notas</dt></template>
+                    <template x-if="detail?.notes"><dd x-text="detail?.notes"></dd></template>
+                    <template x-if="detail?.cancel_reason"><dt>Motivo</dt></template>
+                    <template x-if="detail?.cancel_reason"><dd x-text="detail?.cancel_reason"></dd></template>
+                  </dl>
+                  <div class="option-list">
+                    <template x-for="s in detail?.services" :key="s.service_id">
+                      <label style="cursor:default">
+                        <span class="grow" x-text="s.service_name"></span>
+                        <span class="muted small" x-text="Fmt.duration(s.duration_minutes)"></span>
+                        <span class="mono" x-text="Fmt.money(s.price)"></span>
+                      </label>
+                    </template>
+                  </div>
+                  <div class="row-between"><span class="muted">Total</span><strong class="mono" x-text="Fmt.money(detail?.total_price)"></strong></div>
+
+                  <template x-if="cancelMode">
+                    <div class="stack alert alert-warning">
+                      <strong x-text="cancelMode === 'cancelada' ? '¿Cancelar la cita?' : '¿Marcar que no asistió?'"></strong>
+                      <input placeholder="Motivo (opcional)" x-model="cancelReason">
+                      <div class="row">
+                        <button class="btn btn-danger btn-sm" @click="setStatus(cancelMode, cancelReason)">Confirmar</button>
+                        <button class="btn btn-sm" @click="cancelMode = null">Volver</button>
+                      </div>
+                    </div>
+                  </template>
+                </div>
+                <div class="modal-footer" x-show="!cancelMode">
+                  <button class="btn btn-ghost" @click="$store.app.go('clientes', { id: detail?.client.id })">Ver ficha</button>
+                  <button class="btn btn-danger" x-show="can('cancelada')" @click="cancelMode = 'cancelada'">Cancelar cita</button>
+                  <button class="btn" x-show="can('no_asistio')" @click="cancelMode = 'no_asistio'">No asistió</button>
+                  <button class="btn" x-show="canEdit" @click="openEdit(detail)">Editar / reprogramar</button>
+                  <button class="btn" x-show="can('confirmada')" @click="setStatus('confirmada')">Confirmar</button>
+                  <button class="btn" x-show="can('en_curso')" @click="setStatus('en_curso')">Iniciar</button>
+                  <button class="btn btn-success" x-show="can('completada') && !canCharge" @click="setStatus('completada')">Completar</button>
+                  <button class="btn btn-primary" x-show="canCharge" @click="charge()">Cobrar</button>
+                </div>
+              </div>
+            </div>
+          </template>
+
+          <!-- Formulario de cita -->
+          <template x-if="form">
+            <div class="modal-backdrop" @click.self="form = null" @keydown.escape.window="form = null">
+              <div class="modal modal-lg">
+                <div class="modal-header">
+                  <h2 x-text="form.id ? 'Editar cita' : 'Nueva cita'"></h2>
+                  <button class="btn btn-ghost btn-icon" @click="form = null">✕</button>
+                </div>
+                <div class="modal-body">
+                  <div class="stack" style="gap:6px">
+                    <span class="field-label muted small" style="font-weight:500">Cliente</span>
+                    <template x-if="form.client">
+                      <div class="selected-box">
+                        <div>
+                          <strong x-text="`${form.client.first_name} ${form.client.last_name}`"></strong>
+                          <span class="muted" x-text="form.client.phone ? ' · ' + form.client.phone : ''"></span>
+                        </div>
+                        <button class="btn btn-sm btn-ghost" @click="form.client = null">Cambiar</button>
+                      </div>
+                    </template>
+                    <template x-if="!form.client && !newClient">
+                      <div class="typeahead" x-data="clientPicker()" @click.outside="open = false">
+                        <input placeholder="Buscar por nombre o teléfono (mín. 2 letras)…" x-model="query" @input.debounce.300ms="search()" @focus="open = results.length > 0">
+                        <div class="typeahead-list" x-show="open">
+                          <template x-for="c in results" :key="c.id">
+                            <button type="button" @click="form.client = c; open = false">
+                              <strong x-text="`${c.first_name} ${c.last_name}`"></strong>
+                              <span class="muted" x-text="c.phone ? ' · ' + c.phone : ''"></span>
+                            </button>
+                          </template>
+                          <template x-if="!results.length"><div class="muted small" style="padding:9px 12px">Sin resultados</div></template>
+                        </div>
+                        <button type="button" class="btn btn-sm btn-ghost" style="margin-top:6px" @click="startNewClient(query)">+ Registrar cliente nuevo</button>
+                      </div>
+                    </template>
+                    <template x-if="!form.client && newClient">
+                      <div class="card card-body stack" style="box-shadow:none">
+                        <div class="grid-3">
+                          <label class="field">Nombre<input x-model="newClient.first_name"></label>
+                          <label class="field">Apellido<input x-model="newClient.last_name"></label>
+                          <label class="field">Teléfono<input x-model="newClient.phone"></label>
+                        </div>
+                        <div class="row">
+                          <button class="btn btn-sm btn-primary" @click="saveNewClient()">Guardar cliente</button>
+                          <button class="btn btn-sm" @click="newClient = null">Cancelar</button>
+                        </div>
+                      </div>
+                    </template>
+                  </div>
+
+                  <div class="grid-2">
+                    <label class="field">Estilista
+                      <select x-model.number="form.employee_id" @change="onEmployeeChange()">
+                        <template x-for="e in employees" :key="e.id">
+                          <option :value="e.id" :selected="e.id === Number(form.employee_id)" x-text="`${e.first_name} ${e.last_name}`"></option>
+                        </template>
+                      </select>
+                    </label>
+                    <label class="field">Fecha
+                      <input type="date" x-model="form.date" @change="loadSlots()">
+                    </label>
+                  </div>
+
+                  <div class="stack" style="gap:6px">
+                    <span class="muted small" style="font-weight:500">Servicios</span>
+                    <div class="option-list">
+                      <template x-for="s in formServices" :key="s.id">
+                        <label>
+                          <input type="checkbox" :checked="form.service_ids.includes(s.id)" @change="toggleService(s.id)">
+                          <span class="grow" x-text="s.name"></span>
+                          <span class="muted small" x-text="Fmt.duration(s.duration_minutes)"></span>
+                          <span class="mono" x-text="Fmt.money(s.price)"></span>
+                        </label>
+                      </template>
+                      <template x-if="!formServices.length">
+                        <div class="empty">Este estilista no tiene servicios asignados.</div>
+                      </template>
+                    </div>
+                    <div class="row-between small" x-show="form.service_ids.length">
+                      <span class="muted" x-text="'Duración: ' + Fmt.duration(formSummary.minutes)"></span>
+                      <strong x-text="'Total: ' + Fmt.money(formSummary.price)"></strong>
+                    </div>
+                  </div>
+
+                  <div class="stack" style="gap:8px">
+                    <div class="row-between wrap">
+                      <span class="muted small" style="font-weight:500">Hora disponible</span>
+                      <label class="row small muted">Otra hora:
+                        <input type="time" step="900" x-model="form.time" style="width:120px">
+                      </label>
+                    </div>
+                    <div class="muted small" x-show="!form.service_ids.length">Elige los servicios para ver los horarios libres.</div>
+                    <div class="muted small" x-show="slotsLoading">Buscando horarios…</div>
+                    <div class="chips" x-show="!slotsLoading && slots.length">
+                      <template x-for="t in slots" :key="t">
+                        <button type="button" class="chip" :class="{ active: form.time === t }" @click="form.time = t" x-text="t"></button>
+                      </template>
+                    </div>
+                    <div class="alert alert-warning" x-show="!slotsLoading && form.service_ids.length && !slots.length">
+                      No hay horarios libres ese día para este estilista.
+                    </div>
+                  </div>
+
+                  <label class="field">Notas
+                    <textarea x-model="form.notes" placeholder="Opcional"></textarea>
+                  </label>
+                </div>
+                <div class="modal-footer">
+                  <span class="grow muted small" x-show="form.time" x-text="`${Fmt.dayLong(form.date)} a las ${form.time}`"></span>
+                  <button class="btn" @click="form = null">Cancelar</button>
+                  <button class="btn btn-primary" :disabled="saving" @click="save()" x-text="form.id ? 'Guardar cambios' : 'Agendar cita'"></button>
+                </div>
+              </div>
+            </div>
+          </template>
+        </section>
+      </template>
+
+      <!-- ======================= CLIENTES ======================= -->
+      <template x-if="$store.app.route === 'clientes'">
+        <section x-data="clients">
+          <div class="page-header">
+            <div>
+              <h1>Clientes</h1>
+              <div class="muted small" x-text="`${page.total} registrados`"></div>
+            </div>
+            <button class="btn btn-primary" x-show="$store.app.isStaff" @click="newClient()">+ Nuevo cliente</button>
+          </div>
+
+          <div class="split">
+            <div class="card">
+              <div class="card-header">
+                <input type="search" placeholder="Buscar por nombre, teléfono o email…" x-model="q" @input.debounce.300ms="search()">
+              </div>
+              <div class="table-wrap">
+                <table>
+                  <thead><tr><th>Nombre</th><th>Teléfono</th><th>Email</th></tr></thead>
+                  <tbody>
+                    <template x-for="c in page.items" :key="c.id">
+                      <tr class="clickable" :class="{ selected: selected?.id === c.id }" @click="open(c)">
+                        <td><strong x-text="`${c.first_name} ${c.last_name}`"></strong>
+                          <span class="badge badge-no_asistio" x-show="c.allergies" title="Tiene alergias registradas">Alergias</span></td>
+                        <td x-text="c.phone || '—'" class="nowrap"></td>
+                        <td x-text="c.email || '—'" class="muted"></td>
+                      </tr>
+                    </template>
+                  </tbody>
+                </table>
+                <div class="empty" x-show="!loading && !page.items.length">No se encontraron clientes.</div>
+              </div>
+              <div class="card-header" style="border-top:1px solid var(--border);border-bottom:0" x-show="page.total > limit">
+                <span class="muted small" x-text="`${skip + 1}–${Math.min(skip + limit, page.total)} de ${page.total}`"></span>
+                <div class="row">
+                  <button class="btn btn-sm" :disabled="skip === 0" @click="pageBy(-1)">Anterior</button>
+                  <button class="btn btn-sm" :disabled="skip + limit >= page.total" @click="pageBy(1)">Siguiente</button>
+                </div>
+              </div>
+            </div>
+
+            <div class="card" x-show="!selected"><div class="empty">Selecciona un cliente para ver su ficha.</div></div>
+            <template x-if="selected">
+              <div class="card">
+                <div class="card-header">
+                  <div class="row">
+                    <div class="avatar" x-text="Fmt.initials(selected.first_name + ' ' + selected.last_name)"></div>
+                    <div>
+                      <h2 x-text="`${selected.first_name} ${selected.last_name}`"></h2>
+                      <div class="muted small" x-text="'Cliente desde ' + Fmt.date(selected.created_at)"></div>
+                    </div>
+                  </div>
+                  <div class="row">
+                    <button class="btn btn-sm" x-show="$store.app.isStaff" @click="editClient()">Editar</button>
+                    <button class="btn btn-sm btn-danger" x-show="$store.app.isAdmin" @click="deactivate()">Desactivar</button>
+                  </div>
+                </div>
+                <div class="detail-section stack">
+                  <div class="alert alert-danger" x-show="selected.allergies"><strong>Alergias: </strong><span x-text="selected.allergies"></span></div>
+                  <dl class="kv">
+                    <dt>Teléfono</dt><dd x-text="selected.phone || '—'"></dd>
+                    <dt>Email</dt><dd x-text="selected.email || '—'"></dd>
+                    <dt>Cumpleaños</dt><dd x-text="selected.birth_date ? Fmt.plainDate(selected.birth_date) : '—'"></dd>
+                    <dt>Visitas</dt><dd x-text="completedVisits.length + ' completadas'"></dd>
+                    <dt>Notas</dt><dd x-text="selected.notes || '—'"></dd>
+                  </dl>
+                </div>
+                <div class="detail-section stack">
+                  <h3>Notas y fórmulas</h3>
+                  <div class="stack" style="gap:8px">
+                    <div class="row">
+                      <select x-model="noteForm.kind" style="width:150px">
+                        <option value="general">Nota general</option>
+                        <option value="formula">Fórmula técnica</option>
+                      </select>
+                      <input class="grow" placeholder="Ej: 7.1 + oxidante 20 vol, 35 min" x-model="noteForm.content" @keydown.enter="addNote()">
+                      <button class="btn" @click="addNote()">Agregar</button>
+                    </div>
+                    <template x-for="n in notes" :key="n.id">
+                      <div class="note" :class="{ 'note-formula': n.kind === 'formula' }">
+                        <div class="row-between small muted">
+                          <span x-text="n.kind === 'formula' ? 'Fórmula' : 'Nota'"></span>
+                          <span x-text="Fmt.dateTime(n.created_at)"></span>
+                        </div>
+                        <div x-text="n.content" style="white-space:pre-wrap;margin-top:3px"></div>
+                      </div>
+                    </template>
+                    <div class="muted small" x-show="!notes.length">Sin notas todavía.</div>
+                  </div>
+                </div>
+                <div class="detail-section">
+                  <h3 style="margin-bottom:6px">Historial de citas</h3>
+                  <template x-for="a in history" :key="a.id">
+                    <div class="timeline-item">
+                      <span class="dot" :style="`background:${a.employee.color};margin-top:5px`"></span>
+                      <div class="grow">
+                        <div class="row-between">
+                          <strong class="small" x-text="Fmt.dateTime(a.start_at)"></strong>
+                          <span class="badge" :class="'badge-' + a.status" x-text="STATUS[a.status]"></span>
+                        </div>
+                        <div class="small" x-text="a.services.map(s => s.service_name).join(', ')"></div>
+                        <div class="muted small" x-text="`con ${a.employee.first_name} · ${Fmt.money(a.total_price)}`"></div>
+                      </div>
+                    </div>
+                  </template>
+                  <div class="muted small" x-show="!history.length">Sin citas registradas.</div>
+                </div>
+              </div>
+            </template>
+          </div>
+
+          <template x-if="form">
+            <div class="modal-backdrop" @click.self="form = null" @keydown.escape.window="form = null">
+              <form class="modal" @submit.prevent="save()">
+                <div class="modal-header">
+                  <h2 x-text="form.id ? 'Editar cliente' : 'Nuevo cliente'"></h2>
+                  <button type="button" class="btn btn-ghost btn-icon" @click="form = null">✕</button>
+                </div>
+                <div class="modal-body">
+                  <div class="grid-2">
+                    <label class="field">Nombre *<input x-model="form.first_name" required maxlength="80"></label>
+                    <label class="field">Apellido<input x-model="form.last_name" maxlength="80"></label>
+                    <label class="field">Teléfono<input x-model="form.phone" maxlength="30"></label>
+                    <label class="field">Email<input type="email" x-model="form.email"></label>
+                    <label class="field">Cumpleaños<input type="date" x-model="form.birth_date"></label>
+                  </div>
+                  <label class="field">Alergias o sensibilidades<textarea x-model="form.allergies" placeholder="Ej: alergia al amoníaco"></textarea></label>
+                  <label class="field">Notas<textarea x-model="form.notes"></textarea></label>
+                </div>
+                <div class="modal-footer">
+                  <button type="button" class="btn" @click="form = null">Cancelar</button>
+                  <button class="btn btn-primary" :disabled="saving">Guardar</button>
+                </div>
+              </form>
+            </div>
+          </template>
+        </section>
+      </template>
+
+      <!-- ======================= CAJA ======================= -->
+      <template x-if="$store.app.route === 'caja'">
+        <section x-data="cashView">
+          <div class="page-header">
+            <div>
+              <h1>Caja</h1>
+              <div class="muted small" x-show="session" x-text="session ? 'Abierta desde ' + Fmt.dateTime(session.opened_at) : ''"></div>
+            </div>
+            <div class="row wrap" x-show="session">
+              <button class="btn" @click="movement = { type: 'ingreso', amount: '', concept: '' }">+ Ingreso</button>
+              <button class="btn" @click="movement = { type: 'egreso', amount: '', concept: '' }">− Egreso</button>
+              <button class="btn btn-danger" @click="closing = { counted: '', notes: '' }">Cerrar caja</button>
+              <button class="btn btn-primary" @click="newPos()">+ Nueva venta</button>
+            </div>
+          </div>
+
+          <div class="muted" x-show="loading">Cargando…</div>
+
+          <!-- Caja cerrada -->
+          <template x-if="!loading && !session">
+            <div class="stack" style="max-width:520px">
+              <template x-if="closed">
+                <div class="card card-body stack">
+                  <h2>Caja cerrada</h2>
+                  <dl class="kv">
+                    <dt>Esperado</dt><dd class="mono" x-text="Fmt.money(closed.expected_cash)"></dd>
+                    <dt>Contado</dt><dd class="mono" x-text="Fmt.money(closed.counted_cash)"></dd>
+                    <dt>Diferencia</dt>
+                    <dd class="mono" :style="`color:${Number(closed.difference) < 0 ? 'var(--danger)' : Number(closed.difference) > 0 ? 'var(--warning)' : 'var(--success)'};font-weight:700`"
+                        x-text="Number(closed.difference) === 0 ? 'Cuadra ✓' : Fmt.money(closed.difference)"></dd>
+                  </dl>
+                </div>
+              </template>
+              <form class="card card-body stack" @submit.prevent="openSession()">
+                <h2>Abrir caja</h2>
+                <p class="muted" style="margin:0">Para cobrar, primero abre la caja con el efectivo inicial (sencillo).</p>
+                <label class="field">Monto inicial en efectivo
+                  <input type="number" min="0" step="0.01" x-model="openForm.amount" placeholder="0.00">
+                </label>
+                <label class="field">Notas<input x-model="openForm.notes" placeholder="Opcional"></label>
+                <button class="btn btn-primary" :disabled="saving">Abrir caja</button>
+              </form>
+            </div>
+          </template>
+
+          <!-- Caja abierta -->
+          <template x-if="session">
+            <div>
+              <div class="stats">
+                <div class="card stat"><div class="stat-label">Ventas</div><div class="stat-value" x-text="session.summary.sales_count"></div></div>
+                <div class="card stat"><div class="stat-label">Total vendido</div><div class="stat-value" x-text="Fmt.money(session.summary.sales_total)"></div></div>
+                <template x-for="(label, key) in PAY_METHODS" :key="key">
+                  <div class="card stat" x-show="key !== 'otro' || Number(session.summary.by_method.otro) > 0">
+                    <div class="stat-label" x-text="label"></div>
+                    <div class="stat-value" x-text="Fmt.money(session.summary.by_method[key])"></div>
+                  </div>
+                </template>
+                <div class="card stat" style="border-color:var(--primary)">
+                  <div class="stat-label" style="color:var(--primary)">Efectivo en caja</div>
+                  <div class="stat-value" x-text="Fmt.money(session.summary.expected_cash)"></div>
+                </div>
+              </div>
+
+              <div class="split" style="margin-bottom:16px">
+                <div class="card">
+                  <div class="card-header"><h3>Citas de hoy por cobrar</h3><span class="badge badge-primary" x-text="pending.length"></span></div>
+                  <table>
+                    <tbody>
+                      <template x-for="a in pending" :key="a.id">
+                        <tr>
+                          <td class="nowrap" x-text="Fmt.time(a.start_at)"></td>
+                          <td>
+                            <strong x-text="`${a.client.first_name} ${a.client.last_name}`"></strong>
+                            <div class="muted small" x-text="`${a.employee.first_name} · ${a.services.map(s => s.service_name).join(', ')}`"></div>
+                          </td>
+                          <td><span class="badge" :class="'badge-' + a.status" x-text="STATUS[a.status]"></span></td>
+                          <td class="right mono nowrap" x-text="Fmt.money(a.total_price)"></td>
+                          <td class="right"><button class="btn btn-sm btn-primary" @click="newPos(a)">Cobrar</button></td>
+                        </tr>
+                      </template>
+                    </tbody>
+                  </table>
+                  <div class="empty" x-show="!pending.length">No hay citas pendientes de cobro hoy.</div>
+                </div>
+
+                <div class="card">
+                  <div class="card-header"><h3>Movimientos de efectivo</h3></div>
+                  <table>
+                    <tbody>
+                      <tr>
+                        <td>Monto inicial</td>
+                        <td class="right mono" x-text="Fmt.money(session.opening_amount)"></td>
+                      </tr>
+                      <template x-for="m in session.movements" :key="m.id">
+                        <tr>
+                          <td>
+                            <span x-text="m.concept"></span>
+                            <div class="muted small" x-text="Fmt.time(m.created_at)"></div>
+                          </td>
+                          <td class="right mono" :style="`color:${m.type === 'egreso' ? 'var(--danger)' : 'var(--success)'}`"
+                              x-text="(m.type === 'egreso' ? '− ' : '+ ') + Fmt.money(m.amount)"></td>
+                        </tr>
+                      </template>
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+
+              <div class="card">
+                <div class="card-header"><h3>Ventas de esta caja</h3></div>
+                <div class="table-wrap">
+                  <table>
+                    <thead><tr><th>#</th><th>Hora</th><th>Cliente</th><th>Detalle</th><th>Pago</th><th class="right">Total</th><th></th></tr></thead>
+                    <tbody>
+                      <template x-for="s in sales" :key="s.id">
+                        <tr>
+                          <td class="muted" x-text="s.id"></td>
+                          <td class="nowrap" x-text="Fmt.time(s.created_at)"></td>
+                          <td x-text="clientName(s.client)"></td>
+                          <td class="small" x-text="s.items.map(i => i.description).join(', ')"></td>
+                          <td class="small" x-text="s.payments.map(p => PAY_METHODS[p.method]).join(' + ')"></td>
+                          <td class="right mono nowrap">
+                            <span x-text="Fmt.money(s.total)" :style="s.status === 'anulada' ? 'text-decoration:line-through;color:var(--muted)' : ''"></span>
+                          </td>
+                          <td class="right nowrap">
+                            <span class="badge badge-anulada" x-show="s.status === 'anulada'">Anulada</span>
+                            <button class="btn btn-sm" @click="receipt = { ...s, change: 0 }">Ticket</button>
+                            <button class="btn btn-sm btn-danger" x-show="$store.app.isAdmin && s.status === 'pagada'" @click="voiding = { sale: s, reason: '' }">Anular</button>
+                          </td>
+                        </tr>
+                      </template>
+                    </tbody>
+                  </table>
+                  <div class="empty" x-show="!sales.length">Todavía no hay ventas en esta caja.</div>
+                </div>
+              </div>
+            </div>
+          </template>
+
+          <!-- Historial de cajas (admin) -->
+          <template x-if="$store.app.isAdmin && history.some(h => h.status === 'cerrada')">
+            <div class="card" style="margin-top:16px">
+              <div class="card-header"><h3>Cierres anteriores</h3></div>
+              <div class="table-wrap">
+                <table>
+                  <thead><tr><th>Apertura</th><th>Cierre</th><th class="right">Esperado</th><th class="right">Contado</th><th class="right">Diferencia</th></tr></thead>
+                  <tbody>
+                    <template x-for="h in history.filter(h => h.status === 'cerrada')" :key="h.id">
+                      <tr>
+                        <td class="nowrap" x-text="Fmt.dateTime(h.opened_at)"></td>
+                        <td class="nowrap" x-text="Fmt.dateTime(h.closed_at)"></td>
+                        <td class="right mono" x-text="Fmt.money(h.expected_cash)"></td>
+                        <td class="right mono" x-text="Fmt.money(h.counted_cash)"></td>
+                        <td class="right mono" :style="`color:${Number(h.difference) < 0 ? 'var(--danger)' : Number(h.difference) > 0 ? 'var(--warning)' : 'var(--success)'}`" x-text="Fmt.money(h.difference)"></td>
+                      </tr>
+                    </template>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </template>
+
+          <!-- Punto de venta -->
+          <template x-if="pos">
+            <div class="modal-backdrop" @click.self="pos = null" @keydown.escape.window="pos = null">
+              <div class="modal modal-lg">
+                <div class="modal-header">
+                  <div>
+                    <h2>Cobrar</h2>
+                    <div class="muted small" x-show="pos.appointment_id" x-text="'Cita de las ' + pos.appointmentLabel"></div>
+                  </div>
+                  <button class="btn btn-ghost btn-icon" @click="pos = null">✕</button>
+                </div>
+                <div class="modal-body">
+                  <div class="stack" style="gap:6px">
+                    <span class="muted small" style="font-weight:500">Cliente</span>
+                    <template x-if="pos.client">
+                      <div class="selected-box">
+                        <strong x-text="clientName(pos.client)"></strong>
+                        <button class="btn btn-sm btn-ghost" x-show="!pos.appointment_id" @click="pos.client = null">Quitar</button>
+                      </div>
+                    </template>
+                    <template x-if="!pos.client">
+                      <div class="typeahead" x-data="clientPicker()" @click.outside="open = false">
+                        <input placeholder="Cliente ocasional — o busca por nombre o teléfono…" x-model="query" @input.debounce.300ms="search()">
+                        <div class="typeahead-list" x-show="open">
+                          <template x-for="c in results" :key="c.id">
+                            <button type="button" @click="pos.client = c; open = false" x-text="`${c.first_name} ${c.last_name}${c.phone ? ' · ' + c.phone : ''}`"></button>
+                          </template>
+                          <template x-if="!results.length"><div class="muted small" style="padding:9px 12px">Sin resultados</div></template>
+                        </div>
+                      </div>
+                    </template>
+                  </div>
+
+                  <div class="stack" style="gap:8px">
+                    <div class="pos-item muted small" style="font-weight:500">
+                      <span>Servicio</span><span>Estilista</span><span>Precio</span><span>Descuento</span><span></span>
+                    </div>
+                    <template x-for="(item, idx) in pos.items" :key="idx">
+                      <div class="pos-item">
+                        <select x-model="item.service_id" @change="onServiceChange(item)">
+                          <option value="">Elegir servicio…</option>
+                          <template x-for="s in services" :key="s.id">
+                            <option :value="s.id" :selected="s.id === Number(item.service_id)" x-text="`${s.name} (${Fmt.money(s.price)})`"></option>
+                          </template>
+                        </select>
+                        <select x-model="item.employee_id">
+                          <option value="">—</option>
+                          <template x-for="e in employees" :key="e.id">
+                            <option :value="e.id" :selected="e.id === Number(item.employee_id)" x-text="e.first_name"></option>
+                          </template>
+                        </select>
+                        <input type="number" min="0" step="0.01" x-model="item.unit_price" @input="fillPayment()">
+                        <input type="number" min="0" step="0.01" x-model="item.discount" @input="fillPayment()">
+                        <button class="btn btn-sm btn-ghost btn-icon" title="Quitar" @click="pos.items.splice(idx, 1); fillPayment()" :disabled="pos.items.length === 1">✕</button>
+                      </div>
+                    </template>
+                    <div><button class="btn btn-sm" @click="pos.items.push(blankItem())">+ Agregar servicio</button></div>
+                  </div>
+
+                  <div class="row-between wrap" style="align-items:flex-end">
+                    <label class="field" style="width:180px">Descuento general
+                      <input type="number" min="0" step="0.01" x-model="pos.discount" @input="fillPayment()">
+                    </label>
+                    <div class="totals">
+                      <span class="muted" x-text="'Subtotal ' + Fmt.money(posSubtotal)"></span>
+                      <span class="grand" x-text="'Total ' + Fmt.money(posTotal)"></span>
+                    </div>
+                  </div>
+
+                  <div class="stack" style="gap:8px">
+                    <span class="muted small" style="font-weight:500">Pago</span>
+                    <template x-for="(p, idx) in pos.payments" :key="idx">
+                      <div class="row">
+                        <select x-model="p.method" style="width:160px">
+                          <template x-for="(label, key) in PAY_METHODS" :key="key">
+                            <option :value="key" :selected="key === p.method" x-text="label"></option>
+                          </template>
+                        </select>
+                        <input type="number" min="0" step="0.01" x-model="p.amount" style="width:130px">
+                        <input class="grow" placeholder="Referencia / voucher (opcional)" x-model="p.reference" x-show="p.method !== 'efectivo'">
+                        <span class="grow" x-show="p.method === 'efectivo'"></span>
+                        <button class="btn btn-sm btn-ghost btn-icon" x-show="pos.payments.length > 1" @click="pos.payments.splice(idx, 1)">✕</button>
+                      </div>
+                    </template>
+                    <div class="row-between">
+                      <button class="btn btn-sm" @click="addPayment()">+ Dividir pago</button>
+                      <span class="small" :style="`color:${remaining === 0 ? 'var(--success)' : 'var(--danger)'}`"
+                            x-text="remaining === 0 ? 'Pagos completos ✓' : (remaining > 0 ? 'Falta ' + Fmt.money(remaining) : 'Sobra ' + Fmt.money(-remaining))"></span>
+                    </div>
+                    <div class="row" x-show="cashPaid > 0">
+                      <label class="row small muted">Efectivo recibido
+                        <input type="number" min="0" step="0.01" x-model="pos.received" style="width:130px">
+                      </label>
+                      <strong x-show="change > 0" x-text="'Vuelto: ' + Fmt.money(change)"></strong>
+                    </div>
+                  </div>
+                </div>
+                <div class="modal-footer">
+                  <button class="btn" @click="pos = null">Cancelar</button>
+                  <button class="btn btn-primary" :disabled="saving || remaining !== 0" @click="submitSale()" x-text="'Cobrar ' + Fmt.money(posTotal)"></button>
+                </div>
+              </div>
+            </div>
+          </template>
+
+          <!-- Ticket -->
+          <template x-if="receipt">
+            <div class="modal-backdrop" @click.self="receipt = null">
+              <div class="modal" style="max-width:400px">
+                <div class="modal-body printable">
+                  <div class="ticket">
+                    <div style="text-align:center">
+                      <strong x-text="$store.app.config.app_name"></strong>
+                      <div x-text="'Ticket #' + receipt.id"></div>
+                      <div x-text="Fmt.dateTime(receipt.created_at)"></div>
+                    </div>
+                    <hr>
+                    <div x-text="'Cliente: ' + clientName(receipt.client)"></div>
+                    <hr>
+                    <template x-for="i in receipt.items" :key="i.id">
+                      <div>
+                        <div class="line"><span x-text="i.description"></span><span x-text="Fmt.money(Number(i.unit_price) * i.quantity)"></span></div>
+                        <div class="line" x-show="Number(i.discount) > 0"><span>  Descuento</span><span x-text="'-' + Fmt.money(i.discount)"></span></div>
+                      </div>
+                    </template>
+                    <hr>
+                    <div class="line"><span>Subtotal</span><span x-text="Fmt.money(receipt.subtotal)"></span></div>
+                    <div class="line" x-show="Number(receipt.discount) > 0"><span>Descuento</span><span x-text="'-' + Fmt.money(receipt.discount)"></span></div>
+                    <div class="line"><strong>TOTAL</strong><strong x-text="Fmt.money(receipt.total)"></strong></div>
+                    <hr>
+                    <template x-for="p in receipt.payments" :key="p.id">
+                      <div class="line"><span x-text="PAY_METHODS[p.method]"></span><span x-text="Fmt.money(p.amount)"></span></div>
+                    </template>
+                    <div class="line" x-show="receipt.change > 0"><span>Vuelto</span><span x-text="Fmt.money(receipt.change)"></span></div>
+                    <div x-show="receipt.status === 'anulada'" style="text-align:center;margin-top:8px"><strong>*** ANULADA ***</strong></div>
+                    <hr>
+                    <div style="text-align:center">¡Gracias por tu visita!</div>
+                  </div>
+                </div>
+                <div class="modal-footer">
+                  <button class="btn" @click="receipt = null">Cerrar</button>
+                  <button class="btn btn-primary" @click="window.print()">Imprimir</button>
+                </div>
+              </div>
+            </div>
+          </template>
+
+          <!-- Movimiento -->
+          <template x-if="movement">
+            <div class="modal-backdrop" @click.self="movement = null">
+              <form class="modal" style="max-width:420px" @submit.prevent="saveMovement()">
+                <div class="modal-header">
+                  <h2 x-text="movement.type === 'ingreso' ? 'Ingreso de efectivo' : 'Egreso de efectivo'"></h2>
+                  <button type="button" class="btn btn-ghost btn-icon" @click="movement = null">✕</button>
+                </div>
+                <div class="modal-body">
+                  <label class="field">Monto<input type="number" min="0.01" step="0.01" x-model="movement.amount" required></label>
+                  <label class="field">Concepto<input x-model="movement.concept" required maxlength="255"
+                    :placeholder="movement.type === 'egreso' ? 'Ej: compra de toallas' : 'Ej: cambio de billetes'"></label>
+                </div>
+                <div class="modal-footer">
+                  <button type="button" class="btn" @click="movement = null">Cancelar</button>
+                  <button class="btn btn-primary">Registrar</button>
+                </div>
+              </form>
+            </div>
+          </template>
+
+          <!-- Cierre -->
+          <template x-if="closing && session">
+            <div class="modal-backdrop" @click.self="closing = null">
+              <form class="modal" style="max-width:460px" @submit.prevent="closeSession()">
+                <div class="modal-header">
+                  <h2>Cerrar caja</h2>
+                  <button type="button" class="btn btn-ghost btn-icon" @click="closing = null">✕</button>
+                </div>
+                <div class="modal-body">
+                  <dl class="kv">
+                    <dt>Monto inicial</dt><dd class="mono" x-text="Fmt.money(session.opening_amount)"></dd>
+                    <dt>Ventas efectivo</dt><dd class="mono" x-text="'+ ' + Fmt.money(session.summary.by_method.efectivo)"></dd>
+                    <dt>Ingresos</dt><dd class="mono" x-text="'+ ' + Fmt.money(session.summary.cash_in)"></dd>
+                    <dt>Egresos</dt><dd class="mono" x-text="'− ' + Fmt.money(session.summary.cash_out)"></dd>
+                    <dt><strong>Esperado</strong></dt><dd class="mono"><strong x-text="Fmt.money(session.summary.expected_cash)"></strong></dd>
+                  </dl>
+                  <label class="field">Efectivo contado
+                    <input type="number" min="0" step="0.01" x-model="closing.counted" required autofocus>
+                  </label>
+                  <div class="alert" x-show="closeDiff !== null"
+                       :class="closeDiff === 0 ? 'alert-info' : (closeDiff < 0 ? 'alert-danger' : 'alert-warning')"
+                       x-text="closeDiff === 0 ? 'La caja cuadra ✓' : (closeDiff < 0 ? 'Faltan ' + Fmt.money(-closeDiff) : 'Sobran ' + Fmt.money(closeDiff))"></div>
+                  <label class="field">Notas<input x-model="closing.notes" placeholder="Opcional"></label>
+                </div>
+                <div class="modal-footer">
+                  <button type="button" class="btn" @click="closing = null">Cancelar</button>
+                  <button class="btn btn-danger">Cerrar caja</button>
+                </div>
+              </form>
+            </div>
+          </template>
+
+          <!-- Anular -->
+          <template x-if="voiding">
+            <div class="modal-backdrop" @click.self="voiding = null">
+              <form class="modal" style="max-width:420px" @submit.prevent="confirmVoid()">
+                <div class="modal-header">
+                  <h2 x-text="'Anular venta #' + voiding.sale.id"></h2>
+                  <button type="button" class="btn btn-ghost btn-icon" @click="voiding = null">✕</button>
+                </div>
+                <div class="modal-body">
+                  <div class="alert alert-warning" x-text="`Se anulará la venta por ${Fmt.money(voiding.sale.total)}. No se puede deshacer.`"></div>
+                  <label class="field">Motivo<input x-model="voiding.reason" required maxlength="255"></label>
+                </div>
+                <div class="modal-footer">
+                  <button type="button" class="btn" @click="voiding = null">Volver</button>
+                  <button class="btn btn-danger">Anular venta</button>
+                </div>
+              </form>
+            </div>
+          </template>
+        </section>
+      </template>
+
+      <!-- ======================= SERVICIOS ======================= -->
+      <template x-if="$store.app.route === 'servicios'">
+        <section x-data="servicesView">
+          <div class="page-header">
+            <h1>Servicios</h1>
+            <div class="row" x-show="$store.app.isAdmin">
+              <button class="btn" @click="catForm = { id: null, name: '' }">+ Categoría</button>
+              <button class="btn btn-primary" @click="newService()">+ Nuevo servicio</button>
+            </div>
+          </div>
+
+          <div class="row-between wrap" style="margin-bottom:12px">
+            <div class="chips">
+              <button class="chip" :class="{ active: category === '' }" @click="category = ''">Todos</button>
+              <template x-for="c in categories" :key="c.id">
+                <button class="chip" :class="{ active: category === c.id }" @click="category = c.id"
+                        @dblclick="$store.app.isAdmin && (catForm = { id: c.id, name: c.name })"
+                        :title="$store.app.isAdmin ? 'Doble clic para renombrar' : ''">
+                  <span x-text="c.name"></span><span class="small" style="opacity:.7" x-text="countIn(c.id)"></span>
+                </button>
+              </template>
+            </div>
+            <div class="row">
+              <label class="check small" x-show="$store.app.isAdmin"><input type="checkbox" x-model="showInactive" @change="load()"> Ver inactivos</label>
+              <input type="search" placeholder="Buscar servicio…" x-model="q" style="width:220px">
+            </div>
+          </div>
+
+          <div class="card">
+            <div class="table-wrap">
+              <table>
+                <thead><tr><th>Servicio</th><th>Categoría</th><th>Duración</th><th class="right">Precio</th><th x-show="$store.app.isAdmin"></th></tr></thead>
+                <tbody>
+                  <template x-for="s in filtered" :key="s.id">
+                    <tr :style="s.is_active ? '' : 'opacity:.55'">
+                      <td>
+                        <strong x-text="s.name"></strong>
+                        <span class="badge badge-muted" x-show="!s.is_active">Inactivo</span>
+                        <div class="muted small" x-text="s.description || ''"></div>
+                      </td>
+                      <td x-text="s.category?.name || '—'"></td>
+                      <td class="nowrap" x-text="Fmt.duration(s.duration_minutes)"></td>
+                      <td class="right mono nowrap" x-text="Fmt.money(s.price)"></td>
+                      <td class="right nowrap" x-show="$store.app.isAdmin">
+                        <button class="btn btn-sm" @click="edit(s)">Editar</button>
+                        <button class="btn btn-sm" :class="{ 'btn-danger': s.is_active }" @click="toggleActive(s)" x-text="s.is_active ? 'Desactivar' : 'Activar'"></button>
+                      </td>
+                    </tr>
+                  </template>
+                </tbody>
+              </table>
+              <div class="empty" x-show="!filtered.length">No hay servicios.</div>
+            </div>
+          </div>
+
+          <template x-if="form">
+            <div class="modal-backdrop" @click.self="form = null" @keydown.escape.window="form = null">
+              <form class="modal" @submit.prevent="save()">
+                <div class="modal-header">
+                  <h2 x-text="form.id ? 'Editar servicio' : 'Nuevo servicio'"></h2>
+                  <button type="button" class="btn btn-ghost btn-icon" @click="form = null">✕</button>
+                </div>
+                <div class="modal-body">
+                  <label class="field">Nombre<input x-model="form.name" required maxlength="120"></label>
+                  <div class="grid-3">
+                    <label class="field">Categoría
+                      <select x-model="form.category_id">
+                        <option value="">Sin categoría</option>
+                        <template x-for="c in categories" :key="c.id">
+                          <option :value="c.id" :selected="c.id === Number(form.category_id)" x-text="c.name"></option>
+                        </template>
+                      </select>
+                    </label>
+                    <label class="field">Precio<input type="number" min="0" step="0.01" x-model="form.price" required></label>
+                    <label class="field">Duración (min)<input type="number" min="5" step="5" x-model="form.duration_minutes" required></label>
+                  </div>
+                  <label class="field">Descripción<textarea x-model="form.description" placeholder="Opcional"></textarea></label>
+                </div>
+                <div class="modal-footer">
+                  <button type="button" class="btn" @click="form = null">Cancelar</button>
+                  <button class="btn btn-primary" :disabled="saving">Guardar</button>
+                </div>
+              </form>
+            </div>
+          </template>
+
+          <template x-if="catForm">
+            <div class="modal-backdrop" @click.self="catForm = null">
+              <form class="modal" style="max-width:400px" @submit.prevent="saveCategory()">
+                <div class="modal-header">
+                  <h2 x-text="catForm.id ? 'Renombrar categoría' : 'Nueva categoría'"></h2>
+                  <button type="button" class="btn btn-ghost btn-icon" @click="catForm = null">✕</button>
+                </div>
+                <div class="modal-body"><label class="field">Nombre<input x-model="catForm.name" required maxlength="80"></label></div>
+                <div class="modal-footer">
+                  <button type="button" class="btn" @click="catForm = null">Cancelar</button>
+                  <button class="btn btn-primary">Guardar</button>
+                </div>
+              </form>
+            </div>
+          </template>
+        </section>
+      </template>
+
+      <!-- ======================= ESTILISTAS ======================= -->
+      <template x-if="$store.app.route === 'estilistas'">
+        <section x-data="employeesView">
+          <div class="page-header">
+            <h1>Estilistas</h1>
+            <div class="row" x-show="$store.app.isAdmin">
+              <label class="check small"><input type="checkbox" x-model="showInactive" @change="load()"> Ver inactivos</label>
+              <button class="btn btn-primary" @click="newEmployee()">+ Nuevo estilista</button>
+            </div>
+          </div>
+
+          <div class="cards">
+            <template x-for="e in employees" :key="e.id">
+              <div class="card emp-card" :style="e.is_active ? '' : 'opacity:.6'">
+                <div class="row">
+                  <div class="emp-avatar" :style="`background:${e.color}`" x-text="Fmt.initials(e.first_name + ' ' + e.last_name)"></div>
+                  <div class="grow">
+                    <strong x-text="`${e.first_name} ${e.last_name}`"></strong>
+                    <div class="muted small" x-text="e.phone || 'Sin teléfono'"></div>
+                  </div>
+                  <span class="badge badge-muted" x-show="!e.is_active">Inactivo</span>
+                </div>
+                <div class="week">
+                  <template x-for="(d, i) in WEEKDAYS_SHORT" :key="i">
+                    <div :class="{ on: worksOn(e, i) }" :title="WEEKDAYS[i] + ': ' + (hoursOn(e, i) || 'libre')" x-text="d"></div>
+                  </template>
+                </div>
+                <div class="chips">
+                  <template x-for="s in e.services.filter(s => s.is_active)" :key="s.id">
+                    <span class="badge badge-muted" x-text="s.name"></span>
+                  </template>
+                  <span class="muted small" x-show="!e.services.length">Sin servicios asignados</span>
+                </div>
+                <button class="btn btn-sm" x-show="$store.app.isAdmin" @click="edit(e)">Editar</button>
+              </div>
+            </template>
+          </div>
+          <div class="card empty" x-show="!employees.length">No hay estilistas registrados.</div>
+
+          <template x-if="form">
+            <div class="modal-backdrop" @click.self="form = null" @keydown.escape.window="form = null">
+              <div class="modal modal-lg">
+                <div class="modal-header">
+                  <h2 x-text="form.id ? `${form.first_name} ${form.last_name}` : 'Nuevo estilista'"></h2>
+                  <button class="btn btn-ghost btn-icon" @click="form = null">✕</button>
+                </div>
+                <div class="tabs">
+                  <button :class="{ active: tab === 'datos' }" @click="tab = 'datos'">Datos</button>
+                  <button :class="{ active: tab === 'servicios' }" @click="tab = 'servicios'" x-text="`Servicios (${form.service_ids.length})`"></button>
+                  <button :class="{ active: tab === 'horario' }" @click="tab = 'horario'">Horario</button>
+                  <button x-show="form.id" :class="{ active: tab === 'ausencias' }" @click="tab = 'ausencias'">Ausencias</button>
+                </div>
+                <div class="modal-body">
+                  <div x-show="tab === 'datos'" class="stack">
+                    <div class="grid-2">
+                      <label class="field">Nombre *<input x-model="form.first_name" required></label>
+                      <label class="field">Apellido<input x-model="form.last_name"></label>
+                      <label class="field">Teléfono<input x-model="form.phone"></label>
+                      <label class="field">Email<input type="email" x-model="form.email"></label>
+                      <label class="field">Color en la agenda<input type="color" x-model="form.color"></label>
+                      <label class="field">Usuario para ingresar al sistema
+                        <select x-model="form.user_id">
+                          <option value="">Sin usuario</option>
+                          <template x-for="u in linkableUsers" :key="u.id">
+                            <option :value="u.id" :selected="u.id === Number(form.user_id)" x-text="`${u.full_name} (${u.email})`"></option>
+                          </template>
+                        </select>
+                      </label>
+                    </div>
+                    <label class="check" x-show="form.id"><input type="checkbox" x-model="form.is_active"> Activo (aparece en la agenda)</label>
+                  </div>
+
+                  <div x-show="tab === 'servicios'" class="option-list" style="max-height:380px">
+                    <template x-for="s in services" :key="s.id">
+                      <label>
+                        <input type="checkbox" :checked="form.service_ids.includes(s.id)" @change="toggleService(s.id)">
+                        <span class="grow" x-text="s.name"></span>
+                        <span class="muted small" x-text="s.category?.name || ''"></span>
+                      </label>
+                    </template>
+                  </div>
+
+                  <div x-show="tab === 'horario'">
+                    <div class="row-between" style="margin-bottom:6px">
+                      <span class="muted small">Puedes agregar varios bloques por día (ej. turno partido).</span>
+                      <button class="btn btn-sm" @click="copyMonday()">Copiar lunes a mar–sáb</button>
+                    </div>
+                    <template x-for="(blocks, d) in schedule" :key="d">
+                      <div class="schedule-row">
+                        <strong x-text="WEEKDAYS[d]" style="padding-top:7px"></strong>
+                        <div class="stack" style="gap:6px">
+                          <template x-for="(b, i) in blocks" :key="i">
+                            <div class="row">
+                              <input type="time" x-model="b.start" style="width:120px">
+                              <span class="muted">a</span>
+                              <input type="time" x-model="b.end" style="width:120px">
+                              <button class="btn btn-sm btn-ghost btn-icon" @click="blocks.splice(i, 1)">✕</button>
+                            </div>
+                          </template>
+                          <div class="row">
+                            <span class="muted small" x-show="!blocks.length" style="padding-top:2px">Libre</span>
+                            <button class="btn btn-sm btn-ghost" @click="blocks.push({ start: '09:00', end: '18:00' })">+ bloque</button>
+                          </div>
+                        </div>
+                      </div>
+                    </template>
+                  </div>
+
+                  <div x-show="tab === 'ausencias'" class="stack">
+                    <div class="grid-3">
+                      <label class="field">Desde<input type="datetime-local" x-model="toForm.start"></label>
+                      <label class="field">Hasta<input type="datetime-local" x-model="toForm.end"></label>
+                      <label class="field">Motivo<input x-model="toForm.reason" placeholder="Vacaciones, permiso…"></label>
+                    </div>
+                    <div><button class="btn btn-sm" @click="addTimeOff()">+ Registrar ausencia</button></div>
+                    <table>
+                      <tbody>
+                        <template x-for="t in timeOff" :key="t.id">
+                          <tr>
+                            <td x-text="`${Fmt.dateTime(t.start_at)} → ${Fmt.dateTime(t.end_at)}`"></td>
+                            <td class="muted" x-text="t.reason || ''"></td>
+                            <td class="right"><button class="btn btn-sm btn-danger" @click="removeTimeOff(t)">Quitar</button></td>
+                          </tr>
+                        </template>
+                      </tbody>
+                    </table>
+                    <div class="muted small" x-show="!timeOff.length">Sin ausencias registradas.</div>
+                  </div>
+                </div>
+                <div class="modal-footer">
+                  <button class="btn" @click="form = null">Cancelar</button>
+                  <button class="btn btn-primary" :disabled="saving || !form.first_name" @click="save()">Guardar</button>
+                </div>
+              </div>
+            </div>
+          </template>
+        </section>
+      </template>
+
+      <!-- ======================= USUARIOS ======================= -->
+      <template x-if="$store.app.route === 'usuarios'">
+        <section x-data="usersView">
+          <div class="page-header">
+            <h1>Usuarios</h1>
+            <button class="btn btn-primary" @click="newUser()">+ Nuevo usuario</button>
+          </div>
+          <div class="card">
+            <div class="table-wrap">
+              <table>
+                <thead><tr><th>Nombre</th><th>Email</th><th>Rol</th><th>Estado</th><th></th></tr></thead>
+                <tbody>
+                  <template x-for="u in users" :key="u.id">
+                    <tr>
+                      <td><strong x-text="u.full_name"></strong></td>
+                      <td x-text="u.email"></td>
+                      <td>
+                        <span class="badge badge-primary" x-text="ROLES[u.role]"></span>
+                        <span class="muted small" x-show="u.role === 'estilista' && !u.employee_id">· sin vincular</span>
+                      </td>
+                      <td><span class="badge" :class="u.is_active ? 'badge-completada' : 'badge-muted'" x-text="u.is_active ? 'Activo' : 'Inactivo'"></span></td>
+                      <td class="right"><button class="btn btn-sm" @click="edit(u)">Editar</button></td>
+                    </tr>
+                  </template>
+                </tbody>
+              </table>
+            </div>
+          </div>
+          <p class="muted small">Para que un estilista vea su agenda, crea su usuario con rol “Estilista” y vincúlalo en <a href="#/estilistas">Estilistas</a> → Editar.</p>
+
+          <template x-if="form">
+            <div class="modal-backdrop" @click.self="form = null" @keydown.escape.window="form = null">
+              <form class="modal" @submit.prevent="save()">
+                <div class="modal-header">
+                  <h2 x-text="form.id ? 'Editar usuario' : 'Nuevo usuario'"></h2>
+                  <button type="button" class="btn btn-ghost btn-icon" @click="form = null">✕</button>
+                </div>
+                <div class="modal-body">
+                  <div class="grid-2">
+                    <label class="field">Nombre completo<input x-model="form.full_name" required></label>
+                    <label class="field">Email<input type="email" x-model="form.email" required></label>
+                    <label class="field">Rol
+                      <select x-model="form.role">
+                        <template x-for="(label, key) in ROLES" :key="key">
+                          <option :value="key" :selected="key === form.role" x-text="label"></option>
+                        </template>
+                      </select>
+                    </label>
+                    <label class="field span-2"><span x-text="form.id ? 'Nueva contraseña (déjala vacía para no cambiarla)' : 'Contraseña (mín. 8 caracteres)'"></span>
+                      <input type="password" x-model="form.password" :required="!form.id" minlength="8" maxlength="72" autocomplete="new-password">
+                    </label>
+                  </div>
+                  <label class="check" x-show="form.id"><input type="checkbox" x-model="form.is_active"> Activo</label>
+                </div>
+                <div class="modal-footer">
+                  <button type="button" class="btn" @click="form = null">Cancelar</button>
+                  <button class="btn btn-primary" :disabled="saving">Guardar</button>
+                </div>
+              </form>
+            </div>
+          </template>
+        </section>
+      </template>
+
+    </main>
+  </div>
+</template>
+
+<div class="toasts">
+  <template x-for="t in $store.app.toasts" :key="t.id">
+    <div class="toast" :class="t.type" x-text="t.message"></div>
+  </template>
+</div>
+
+<script src="/static/js/core.js"></script>
+<script src="/static/js/agenda.js"></script>
+<script src="/static/js/clients.js"></script>
+<script src="/static/js/catalog.js"></script>
+<script src="/static/js/cash.js"></script>
+<script defer src="/static/vendor/alpine.min.js"></script>
+</body>
+</html>
