@@ -2,9 +2,15 @@
 <html lang="es">
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#a8456a">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-title" content="Hair Sist">
   <title>Hair Sist</title>
-  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>✂️</text></svg>">
+  <link rel="manifest" href="/static/manifest.json">
+  <link rel="icon" type="image/svg+xml" href="/static/icons/icon.svg">
+  <link rel="apple-touch-icon" href="/static/icons/icon-180.png">
   <link rel="stylesheet" href="/static/css/styles.css">
 </head>
 <body x-data>
@@ -36,13 +42,50 @@
 
 <!-- ======================= APLICACIÓN ======================= -->
 <template x-if="$store.app.ready && $store.app.user">
-  <div class="layout">
+  <div class="layout" x-data="passwordForm">
     <div class="mobile-bar">
-      <button class="btn btn-icon" @click="$store.app.menuOpen = !$store.app.menuOpen">☰</button>
-      <strong x-text="$store.app.config?.app_name"></strong>
+      <div class="brand-logo" style="width:32px;height:32px;border-radius:9px">✂</div>
+      <strong class="grow" x-text="$store.app.currentLabel"></strong>
+      <div style="position:relative" @click.outside="$store.app.menuOpen = false">
+        <button class="avatar" style="border:0;cursor:pointer" @click="$store.app.menuOpen = !$store.app.menuOpen"
+                x-text="Fmt.initials($store.app.user.full_name)"></button>
+        <div class="user-menu" x-show="$store.app.menuOpen" x-transition.opacity>
+          <div style="padding:10px 14px">
+            <div style="font-weight:600" x-text="$store.app.user.full_name"></div>
+            <div class="muted small" x-text="ROLES[$store.app.user.role]"></div>
+          </div>
+          <button @click="open = true; $store.app.menuOpen = false">Cambiar contraseña</button>
+          <button @click="$store.app.logout()" style="color:var(--danger)">Cerrar sesión</button>
+        </div>
+      </div>
     </div>
 
-    <aside class="sidebar" :class="{ open: $store.app.menuOpen }">
+    <nav class="bottom-nav">
+      <template x-for="item in $store.app.nav" :key="item.route">
+        <a :href="'#/' + item.route" :class="{ active: $store.app.route === item.route }">
+          <span x-html="ICONS[item.route]"></span>
+          <span x-text="item.label"></span>
+        </a>
+      </template>
+    </nav>
+
+    <template x-if="open">
+      <div class="modal-backdrop" @click.self="open = false">
+        <form class="modal" @submit.prevent="save()">
+          <div class="modal-header"><h2>Cambiar contraseña</h2><button type="button" class="btn btn-ghost btn-icon" @click="open = false">✕</button></div>
+          <div class="modal-body">
+            <label class="field">Contraseña actual<input type="password" x-model="current" required autocomplete="current-password"></label>
+            <label class="field">Nueva contraseña (mín. 8 caracteres)<input type="password" x-model="next" minlength="8" maxlength="72" required autocomplete="new-password"></label>
+          </div>
+          <div class="modal-footer">
+            <button type="button" class="btn" @click="open = false">Cancelar</button>
+            <button class="btn btn-primary" :disabled="saving">Guardar</button>
+          </div>
+        </form>
+      </div>
+    </template>
+
+    <aside class="sidebar">
       <div class="brand">
         <div class="brand-logo">✂</div>
         <div class="brand-name">Hair Sist</div>
@@ -55,7 +98,7 @@
           </a>
         </template>
       </nav>
-      <div class="sidebar-footer" x-data="passwordForm">
+      <div class="sidebar-footer">
         <div class="row">
           <div class="avatar" x-text="Fmt.initials($store.app.user.full_name)"></div>
           <div class="grow">
@@ -67,22 +110,6 @@
           <button class="btn btn-sm grow" @click="open = true">Contraseña</button>
           <button class="btn btn-sm grow" @click="$store.app.logout()">Salir</button>
         </div>
-
-        <template x-if="open">
-          <div class="modal-backdrop" @click.self="open = false">
-            <form class="modal" @submit.prevent="save()">
-              <div class="modal-header"><h2>Cambiar contraseña</h2><button type="button" class="btn btn-ghost btn-icon" @click="open = false">✕</button></div>
-              <div class="modal-body">
-                <label class="field">Contraseña actual<input type="password" x-model="current" required></label>
-                <label class="field">Nueva contraseña (mín. 8 caracteres)<input type="password" x-model="next" minlength="8" maxlength="72" required></label>
-              </div>
-              <div class="modal-footer">
-                <button type="button" class="btn" @click="open = false">Cancelar</button>
-                <button class="btn btn-primary" :disabled="saving">Guardar</button>
-              </div>
-            </form>
-          </div>
-        </template>
       </div>
     </aside>
 
@@ -99,13 +126,25 @@
               <input type="date" x-model="day" @change="load()" style="width:auto">
               <span class="agenda-date" x-text="Fmt.dayLong(day)"></span>
             </div>
-            <button x-show="$store.app.isStaff" class="btn btn-primary" @click="openNew()">+ Nueva cita</button>
+            <button x-show="$store.app.isStaff" class="btn btn-primary fab" @click="openNew()" aria-label="Nueva cita">
+              <span class="fab-plus">+</span><span class="fab-label">Nueva cita</span>
+            </button>
           </div>
 
           <div class="legend" style="margin-bottom:10px">
             <span x-show="$store.app.isStaff">Haz clic en un espacio libre para agendar.</span>
             <span>Las franjas rayadas están fuera del horario del estilista.</span>
             <span><strong style="color:var(--success)">✓</strong> cobrada</span>
+          </div>
+
+          <div class="chips scroll-x only-mobile" style="margin-bottom:10px" x-show="employees.length > 1">
+            <template x-for="emp in employees" :key="emp.id">
+              <button class="chip" :class="{ active: emp.id === mobileEmpId }" @click="mobileEmpId = emp.id">
+                <span class="dot" :style="`background:${emp.color}`"></span>
+                <span x-text="emp.first_name"></span>
+                <span class="small" style="opacity:.75" x-text="activeCount(emp)"></span>
+              </button>
+            </template>
           </div>
 
           <div class="card" style="overflow:hidden">
@@ -120,11 +159,11 @@
                 </template>
               </div>
               <template x-for="emp in employees" :key="emp.id">
-                <div class="agenda-col">
+                <div class="agenda-col" x-show="!$store.app.isMobile || emp.id === mobileEmpId">
                   <div class="agenda-head">
                     <span class="dot" :style="`background:${emp.color}`"></span>
                     <span class="grow" x-text="`${emp.first_name} ${emp.last_name}`"></span>
-                    <span class="badge badge-muted" x-text="apptsOf(emp).filter(a => !['cancelada','no_asistio'].includes(a.status)).length"></span>
+                    <span class="badge badge-muted" x-text="activeCount(emp)"></span>
                   </div>
                   <div class="agenda-body agenda-grid" @click="clickGrid(emp, $event)">
                     <template x-for="h in hours" :key="h"><div class="agenda-hour"></div></template>
@@ -245,7 +284,7 @@
                         <div class="grid-3">
                           <label class="field">Nombre<input x-model="newClient.first_name"></label>
                           <label class="field">Apellido<input x-model="newClient.last_name"></label>
-                          <label class="field">Teléfono<input x-model="newClient.phone"></label>
+                          <label class="field">Teléfono<input type="tel" x-model="newClient.phone"></label>
                         </div>
                         <div class="row">
                           <button class="btn btn-sm btn-primary" @click="saveNewClient()">Guardar cliente</button>
@@ -334,21 +373,21 @@
             <button class="btn btn-primary" x-show="$store.app.isStaff" @click="newClient()">+ Nuevo cliente</button>
           </div>
 
-          <div class="split">
-            <div class="card">
+          <div class="split" :class="{ 'has-selection': selected }">
+            <div class="card list-pane">
               <div class="card-header">
                 <input type="search" placeholder="Buscar por nombre, teléfono o email…" x-model="q" @input.debounce.300ms="search()">
               </div>
               <div class="table-wrap">
                 <table>
-                  <thead><tr><th>Nombre</th><th>Teléfono</th><th>Email</th></tr></thead>
+                  <thead><tr><th>Nombre</th><th>Teléfono</th><th class="hide-mobile">Email</th></tr></thead>
                   <tbody>
                     <template x-for="c in page.items" :key="c.id">
                       <tr class="clickable" :class="{ selected: selected?.id === c.id }" @click="open(c)">
                         <td><strong x-text="`${c.first_name} ${c.last_name}`"></strong>
                           <span class="badge badge-no_asistio" x-show="c.allergies" title="Tiene alergias registradas">Alergias</span></td>
                         <td x-text="c.phone || '—'" class="nowrap"></td>
-                        <td x-text="c.email || '—'" class="muted"></td>
+                        <td x-text="c.email || '—'" class="muted hide-mobile"></td>
                       </tr>
                     </template>
                   </tbody>
@@ -364,11 +403,12 @@
               </div>
             </div>
 
-            <div class="card" x-show="!selected"><div class="empty">Selecciona un cliente para ver su ficha.</div></div>
+            <div class="card hide-mobile" x-show="!selected"><div class="empty">Selecciona un cliente para ver su ficha.</div></div>
             <template x-if="selected">
               <div class="card">
                 <div class="card-header">
                   <div class="row">
+                    <button class="btn btn-ghost btn-icon only-mobile" @click="selected = null" aria-label="Volver a la lista">←</button>
                     <div class="avatar" x-text="Fmt.initials(selected.first_name + ' ' + selected.last_name)"></div>
                     <div>
                       <h2 x-text="`${selected.first_name} ${selected.last_name}`"></h2>
@@ -445,7 +485,7 @@
                   <div class="grid-2">
                     <label class="field">Nombre *<input x-model="form.first_name" required maxlength="80"></label>
                     <label class="field">Apellido<input x-model="form.last_name" maxlength="80"></label>
-                    <label class="field">Teléfono<input x-model="form.phone" maxlength="30"></label>
+                    <label class="field">Teléfono<input type="tel" x-model="form.phone" maxlength="30"></label>
                     <label class="field">Email<input type="email" x-model="form.email"></label>
                     <label class="field">Cumpleaños<input type="date" x-model="form.birth_date"></label>
                   </div>
@@ -470,7 +510,7 @@
               <h1>Caja</h1>
               <div class="muted small" x-show="session" x-text="session ? 'Abierta desde ' + Fmt.dateTime(session.opened_at) : ''"></div>
             </div>
-            <div class="row wrap" x-show="session">
+            <div class="row wrap header-actions" x-show="session">
               <button class="btn" @click="movement = { type: 'ingreso', amount: '', concept: '' }">+ Ingreso</button>
               <button class="btn" @click="movement = { type: 'egreso', amount: '', concept: '' }">− Egreso</button>
               <button class="btn btn-danger" @click="closing = { counted: '', notes: '' }">Cerrar caja</button>
@@ -499,7 +539,7 @@
                 <h2>Abrir caja</h2>
                 <p class="muted" style="margin:0">Para cobrar, primero abre la caja con el efectivo inicial (sencillo).</p>
                 <label class="field">Monto inicial en efectivo
-                  <input type="number" min="0" step="0.01" x-model="openForm.amount" placeholder="0.00">
+                  <input type="number" inputmode="decimal" min="0" step="0.01" x-model="openForm.amount" placeholder="0.00">
                 </label>
                 <label class="field">Notas<input x-model="openForm.notes" placeholder="Opcional"></label>
                 <button class="btn btn-primary" :disabled="saving">Abrir caja</button>
@@ -537,7 +577,7 @@
                             <strong x-text="`${a.client.first_name} ${a.client.last_name}`"></strong>
                             <div class="muted small" x-text="`${a.employee.first_name} · ${a.services.map(s => s.service_name).join(', ')}`"></div>
                           </td>
-                          <td><span class="badge" :class="'badge-' + a.status" x-text="STATUS[a.status]"></span></td>
+                          <td class="hide-mobile"><span class="badge" :class="'badge-' + a.status" x-text="STATUS[a.status]"></span></td>
                           <td class="right mono nowrap" x-text="Fmt.money(a.total_price)"></td>
                           <td class="right"><button class="btn btn-sm btn-primary" @click="newPos(a)">Cobrar</button></td>
                         </tr>
@@ -574,15 +614,15 @@
                 <div class="card-header"><h3>Ventas de esta caja</h3></div>
                 <div class="table-wrap">
                   <table>
-                    <thead><tr><th>#</th><th>Hora</th><th>Cliente</th><th>Detalle</th><th>Pago</th><th class="right">Total</th><th></th></tr></thead>
+                    <thead><tr><th class="hide-mobile">#</th><th>Hora</th><th>Cliente</th><th class="hide-mobile">Detalle</th><th class="hide-mobile">Pago</th><th class="right">Total</th><th></th></tr></thead>
                     <tbody>
                       <template x-for="s in sales" :key="s.id">
                         <tr>
-                          <td class="muted" x-text="s.id"></td>
+                          <td class="muted hide-mobile" x-text="s.id"></td>
                           <td class="nowrap" x-text="Fmt.time(s.created_at)"></td>
-                          <td x-text="clientName(s.client)"></td>
-                          <td class="small" x-text="s.items.map(i => i.description).join(', ')"></td>
-                          <td class="small" x-text="s.payments.map(p => PAY_METHODS[p.method]).join(' + ')"></td>
+                          <td><span x-text="clientName(s.client)"></span><div class="muted small only-mobile" x-text="s.payments.map(p => PAY_METHODS[p.method]).join(' + ')"></div></td>
+                          <td class="small hide-mobile" x-text="s.items.map(i => i.description).join(', ')"></td>
+                          <td class="small hide-mobile" x-text="s.payments.map(p => PAY_METHODS[p.method]).join(' + ')"></td>
                           <td class="right mono nowrap">
                             <span x-text="Fmt.money(s.total)" :style="s.status === 'anulada' ? 'text-decoration:line-through;color:var(--muted)' : ''"></span>
                           </td>
@@ -658,25 +698,29 @@
                   </div>
 
                   <div class="stack" style="gap:8px">
-                    <div class="pos-item muted small" style="font-weight:500">
+                    <div class="pos-item muted small hide-mobile" style="font-weight:500">
                       <span>Servicio</span><span>Estilista</span><span>Precio</span><span>Descuento</span><span></span>
                     </div>
                     <template x-for="(item, idx) in pos.items" :key="idx">
                       <div class="pos-item">
+                        <label class="pos-cell pos-service"><span class="pos-cell-label">Servicio</span>
                         <select x-model="item.service_id" @change="onServiceChange(item)">
                           <option value="">Elegir servicio…</option>
                           <template x-for="s in services" :key="s.id">
                             <option :value="s.id" :selected="s.id === Number(item.service_id)" x-text="`${s.name} (${Fmt.money(s.price)})`"></option>
                           </template>
-                        </select>
+                        </select></label>
+                        <label class="pos-cell"><span class="pos-cell-label">Estilista</span>
                         <select x-model="item.employee_id">
                           <option value="">—</option>
                           <template x-for="e in employees" :key="e.id">
                             <option :value="e.id" :selected="e.id === Number(item.employee_id)" x-text="e.first_name"></option>
                           </template>
-                        </select>
-                        <input type="number" min="0" step="0.01" x-model="item.unit_price" @input="fillPayment()">
-                        <input type="number" min="0" step="0.01" x-model="item.discount" @input="fillPayment()">
+                        </select></label>
+                        <label class="pos-cell"><span class="pos-cell-label">Precio</span>
+                        <input type="number" inputmode="decimal" min="0" step="0.01" x-model="item.unit_price" @input="fillPayment()"></label>
+                        <label class="pos-cell"><span class="pos-cell-label">Desc.</span>
+                        <input type="number" inputmode="decimal" min="0" step="0.01" x-model="item.discount" @input="fillPayment()"></label>
                         <button class="btn btn-sm btn-ghost btn-icon" title="Quitar" @click="pos.items.splice(idx, 1); fillPayment()" :disabled="pos.items.length === 1">✕</button>
                       </div>
                     </template>
@@ -685,7 +729,7 @@
 
                   <div class="row-between wrap" style="align-items:flex-end">
                     <label class="field" style="width:180px">Descuento general
-                      <input type="number" min="0" step="0.01" x-model="pos.discount" @input="fillPayment()">
+                      <input type="number" inputmode="decimal" min="0" step="0.01" x-model="pos.discount" @input="fillPayment()">
                     </label>
                     <div class="totals">
                       <span class="muted" x-text="'Subtotal ' + Fmt.money(posSubtotal)"></span>
@@ -696,15 +740,15 @@
                   <div class="stack" style="gap:8px">
                     <span class="muted small" style="font-weight:500">Pago</span>
                     <template x-for="(p, idx) in pos.payments" :key="idx">
-                      <div class="row">
-                        <select x-model="p.method" style="width:160px">
+                      <div class="row pay-row">
+                        <select x-model="p.method" class="pay-method">
                           <template x-for="(label, key) in PAY_METHODS" :key="key">
                             <option :value="key" :selected="key === p.method" x-text="label"></option>
                           </template>
                         </select>
-                        <input type="number" min="0" step="0.01" x-model="p.amount" style="width:130px">
-                        <input class="grow" placeholder="Referencia / voucher (opcional)" x-model="p.reference" x-show="p.method !== 'efectivo'">
-                        <span class="grow" x-show="p.method === 'efectivo'"></span>
+                        <input type="number" inputmode="decimal" min="0" step="0.01" x-model="p.amount" class="pay-amount">
+                        <input class="grow pay-ref" placeholder="Referencia / voucher (opcional)" x-model="p.reference" x-show="p.method !== 'efectivo'">
+                        <span class="grow hide-mobile" x-show="p.method === 'efectivo'"></span>
                         <button class="btn btn-sm btn-ghost btn-icon" x-show="pos.payments.length > 1" @click="pos.payments.splice(idx, 1)">✕</button>
                       </div>
                     </template>
@@ -715,7 +759,7 @@
                     </div>
                     <div class="row" x-show="cashPaid > 0">
                       <label class="row small muted">Efectivo recibido
-                        <input type="number" min="0" step="0.01" x-model="pos.received" style="width:130px">
+                        <input type="number" inputmode="decimal" min="0" step="0.01" x-model="pos.received" style="width:130px">
                       </label>
                       <strong x-show="change > 0" x-text="'Vuelto: ' + Fmt.money(change)"></strong>
                     </div>
@@ -780,7 +824,7 @@
                   <button type="button" class="btn btn-ghost btn-icon" @click="movement = null">✕</button>
                 </div>
                 <div class="modal-body">
-                  <label class="field">Monto<input type="number" min="0.01" step="0.01" x-model="movement.amount" required></label>
+                  <label class="field">Monto<input type="number" inputmode="decimal" min="0.01" step="0.01" x-model="movement.amount" required></label>
                   <label class="field">Concepto<input x-model="movement.concept" required maxlength="255"
                     :placeholder="movement.type === 'egreso' ? 'Ej: compra de toallas' : 'Ej: cambio de billetes'"></label>
                 </div>
@@ -809,7 +853,7 @@
                     <dt><strong>Esperado</strong></dt><dd class="mono"><strong x-text="Fmt.money(session.summary.expected_cash)"></strong></dd>
                   </dl>
                   <label class="field">Efectivo contado
-                    <input type="number" min="0" step="0.01" x-model="closing.counted" required autofocus>
+                    <input type="number" inputmode="decimal" min="0" step="0.01" x-model="closing.counted" required autofocus>
                   </label>
                   <div class="alert" x-show="closeDiff !== null"
                        :class="closeDiff === 0 ? 'alert-info' : (closeDiff < 0 ? 'alert-danger' : 'alert-warning')"
@@ -870,24 +914,25 @@
             </div>
             <div class="row">
               <label class="check small" x-show="$store.app.isAdmin"><input type="checkbox" x-model="showInactive" @change="load()"> Ver inactivos</label>
-              <input type="search" placeholder="Buscar servicio…" x-model="q" style="width:220px">
+              <input type="search" placeholder="Buscar servicio…" x-model="q" class="search-sm">
             </div>
           </div>
 
           <div class="card">
             <div class="table-wrap">
               <table>
-                <thead><tr><th>Servicio</th><th>Categoría</th><th>Duración</th><th class="right">Precio</th><th x-show="$store.app.isAdmin"></th></tr></thead>
+                <thead><tr><th>Servicio</th><th class="hide-mobile">Categoría</th><th class="hide-mobile">Duración</th><th class="right">Precio</th><th x-show="$store.app.isAdmin"></th></tr></thead>
                 <tbody>
                   <template x-for="s in filtered" :key="s.id">
                     <tr :style="s.is_active ? '' : 'opacity:.55'">
                       <td>
                         <strong x-text="s.name"></strong>
                         <span class="badge badge-muted" x-show="!s.is_active">Inactivo</span>
+                        <div class="muted small only-mobile" x-text="Fmt.duration(s.duration_minutes) + (s.category ? ' · ' + s.category.name : '')"></div>
                         <div class="muted small" x-text="s.description || ''"></div>
                       </td>
-                      <td x-text="s.category?.name || '—'"></td>
-                      <td class="nowrap" x-text="Fmt.duration(s.duration_minutes)"></td>
+                      <td class="hide-mobile" x-text="s.category?.name || '—'"></td>
+                      <td class="nowrap hide-mobile" x-text="Fmt.duration(s.duration_minutes)"></td>
                       <td class="right mono nowrap" x-text="Fmt.money(s.price)"></td>
                       <td class="right nowrap" x-show="$store.app.isAdmin">
                         <button class="btn btn-sm" @click="edit(s)">Editar</button>
@@ -1007,7 +1052,7 @@
                     <div class="grid-2">
                       <label class="field">Nombre *<input x-model="form.first_name" required></label>
                       <label class="field">Apellido<input x-model="form.last_name"></label>
-                      <label class="field">Teléfono<input x-model="form.phone"></label>
+                      <label class="field">Teléfono<input type="tel" x-model="form.phone"></label>
                       <label class="field">Email<input type="email" x-model="form.email"></label>
                       <label class="field">Color en la agenda<input type="color" x-model="form.color"></label>
                       <label class="field">Usuario para ingresar al sistema
@@ -1099,17 +1144,17 @@
           <div class="card">
             <div class="table-wrap">
               <table>
-                <thead><tr><th>Nombre</th><th>Email</th><th>Rol</th><th>Estado</th><th></th></tr></thead>
+                <thead><tr><th>Nombre</th><th class="hide-mobile">Email</th><th>Rol</th><th class="hide-mobile">Estado</th><th></th></tr></thead>
                 <tbody>
                   <template x-for="u in users" :key="u.id">
                     <tr>
-                      <td><strong x-text="u.full_name"></strong></td>
-                      <td x-text="u.email"></td>
+                      <td><strong x-text="u.full_name"></strong><div class="muted small only-mobile" x-text="u.email"></div></td>
+                      <td class="hide-mobile" x-text="u.email"></td>
                       <td>
                         <span class="badge badge-primary" x-text="ROLES[u.role]"></span>
                         <span class="muted small" x-show="u.role === 'estilista' && !u.employee_id">· sin vincular</span>
                       </td>
-                      <td><span class="badge" :class="u.is_active ? 'badge-completada' : 'badge-muted'" x-text="u.is_active ? 'Activo' : 'Inactivo'"></span></td>
+                      <td class="hide-mobile"><span class="badge" :class="u.is_active ? 'badge-completada' : 'badge-muted'" x-text="u.is_active ? 'Activo' : 'Inactivo'"></span></td>
                       <td class="right"><button class="btn btn-sm" @click="edit(u)">Editar</button></td>
                     </tr>
                   </template>

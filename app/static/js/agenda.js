@@ -4,6 +4,7 @@ document.addEventListener("alpine:init", () => {
   Alpine.data("agenda", () => ({
     day: Fmt.today(),
     employees: [],
+    mobileEmpId: null, // estilista visible en celular (una columna a la vez)
     appointments: [],
     loading: false,
     pxPerMin: 80 / 60, // 80 px por hora
@@ -23,6 +24,7 @@ document.addEventListener("alpine:init", () => {
         let employees = await API.get("/employees");
         if (app.user.role === "estilista") employees = employees.filter((e) => e.id === app.user.employee_id);
         this.employees = employees;
+        this.mobileEmpId = employees[0]?.id ?? null;
         await this.load();
       } catch (e) {
         app.error(e);
@@ -77,6 +79,10 @@ document.addEventListener("alpine:init", () => {
       return this.appointments.filter((a) => a.employee.id === emp.id);
     },
 
+    activeCount(emp) {
+      return this.apptsOf(emp).filter((a) => !["cancelada", "no_asistio"].includes(a.status)).length;
+    },
+
     apptStyle(a) {
       const s = Fmt.minutesOfDay(a.start_at), e = Fmt.minutesOfDay(a.end_at);
       const top = (s - this.range.start) * this.pxPerMin;
@@ -120,7 +126,7 @@ document.addEventListener("alpine:init", () => {
       this.form = {
         id: null,
         client: null,
-        employee_id: emp?.id ?? this.employees[0]?.id ?? "",
+        employee_id: emp?.id ?? (Alpine.store("app").isMobile ? this.mobileEmpId : null) ?? this.employees[0]?.id ?? "",
         service_ids: [],
         date: this.day,
         time,

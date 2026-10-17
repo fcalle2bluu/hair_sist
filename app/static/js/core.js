@@ -198,8 +198,12 @@ document.addEventListener("alpine:init", () => {
     params: {},
     toasts: [],
     menuOpen: false,
+    isMobile: false,
 
     async init() {
+      const mq = window.matchMedia("(max-width: 760px)");
+      this.isMobile = mq.matches;
+      mq.addEventListener("change", (e) => (this.isMobile = e.matches));
       try {
         this.config = await API.get("/config");
         Fmt.tz = this.config.timezone;
@@ -234,6 +238,10 @@ document.addEventListener("alpine:init", () => {
 
     get nav() {
       return NAV.filter((n) => this.canSee(n.route));
+    },
+
+    get currentLabel() {
+      return NAV.find((n) => n.route === this.route)?.label ?? "";
     },
 
     canSee(route) {
