@@ -113,7 +113,7 @@ tests/
    | `SECRET_KEY` | una clave larga y aleatoria |
    | `TIMEZONE` | `America/La_Paz` |
    | `CURRENCY_SYMBOL` | `Bs` |
-   | `ADMIN_EMAIL` | email del primer administrador |
-   | `ADMIN_PASSWORD` | su contraseña (mín. 8 caracteres) |
+   | `ADMIN_EMAIL` | usuario del primer administrador (ej. `admin`) |
+   | `ADMIN_PASSWORD` | su contraseña (mín. 4 caracteres) |
 
 En cada arranque se aplican las migraciones. El administrador solo se crea si todavía no existe ninguno, así que cambiar `ADMIN_PASSWORD` después no modifica la contraseña. La versión de Python se fija en `.python-version`.

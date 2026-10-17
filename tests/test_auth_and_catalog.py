@@ -77,3 +77,18 @@ def test_employees_filtered_by_service(client, admin, salon):
     by_manicure = client.get("/api/employees", params={"service_id": salon["manicure"]["id"]}, headers=admin).json()
     assert [e["id"] for e in by_corte] == [salon["employee"]["id"]]
     assert by_manicure == []
+
+
+def test_username_login_with_short_password(client, admin):
+    payload = {"email": "Recepcion", "full_name": "Recepción", "role": "recepcionista", "password": "2221"}
+    resp = client.post("/api/users", json=payload, headers=admin)
+    assert resp.status_code == 201, resp.text
+    assert resp.json()["email"] == "recepcion"
+
+    login = client.post("/api/auth/login", data={"username": "recepcion", "password": "2221"})
+    assert login.status_code == 200
+
+    too_short = {**payload, "email": "otro", "password": "123"}
+    assert client.post("/api/users", json=too_short, headers=admin).status_code == 422
+    bad_chars = {**payload, "email": "con espacio", "password": "2221"}
+    assert client.post("/api/users", json=bad_chars, headers=admin).status_code == 422

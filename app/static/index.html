@@ -28,8 +28,8 @@
           <div class="muted small">Ingresa para continuar</div>
         </div>
       </div>
-      <label class="field">Email
-        <input type="email" x-model="email" required autofocus autocomplete="username">
+      <label class="field">Usuario
+        <input type="text" x-model="email" required autofocus autocomplete="username" autocapitalize="none" autocorrect="off" spellcheck="false">
       </label>
       <label class="field">Contraseña
         <input type="password" x-model="password" required autocomplete="current-password">
@@ -75,7 +75,7 @@
           <div class="modal-header"><h2>Cambiar contraseña</h2><button type="button" class="btn btn-ghost btn-icon" @click="open = false">✕</button></div>
           <div class="modal-body">
             <label class="field">Contraseña actual<input type="password" x-model="current" required autocomplete="current-password"></label>
-            <label class="field">Nueva contraseña (mín. 8 caracteres)<input type="password" x-model="next" minlength="8" maxlength="72" required autocomplete="new-password"></label>
+            <label class="field">Nueva contraseña (mín. 4 caracteres)<input type="password" x-model="next" minlength="4" maxlength="72" required autocomplete="new-password"></label>
           </div>
           <div class="modal-footer">
             <button type="button" class="btn" @click="open = false">Cancelar</button>
@@ -1144,7 +1144,7 @@
           <div class="card">
             <div class="table-wrap">
               <table>
-                <thead><tr><th>Nombre</th><th class="hide-mobile">Email</th><th>Rol</th><th class="hide-mobile">Estado</th><th></th></tr></thead>
+                <thead><tr><th>Nombre</th><th class="hide-mobile">Usuario</th><th>Rol</th><th class="hide-mobile">Estado</th><th></th></tr></thead>
                 <tbody>
                   <template x-for="u in users" :key="u.id">
                     <tr>
@@ -1174,7 +1174,7 @@
                 <div class="modal-body">
                   <div class="grid-2">
                     <label class="field">Nombre completo<input x-model="form.full_name" required></label>
-                    <label class="field">Email<input type="email" x-model="form.email" required></label>
+                    <label class="field">Usuario (para ingresar)<input type="text" x-model="form.email" required minlength="3" autocapitalize="none" autocorrect="off" spellcheck="false" placeholder="ej. ana o ana@correo.com"></label>
                     <label class="field">Rol
                       <select x-model="form.role">
                         <template x-for="(label, key) in ROLES" :key="key">
@@ -1182,8 +1182,8 @@
                         </template>
                       </select>
                     </label>
-                    <label class="field span-2"><span x-text="form.id ? 'Nueva contraseña (déjala vacía para no cambiarla)' : 'Contraseña (mín. 8 caracteres)'"></span>
-                      <input type="password" x-model="form.password" :required="!form.id" minlength="8" maxlength="72" autocomplete="new-password">
+                    <label class="field span-2"><span x-text="form.id ? 'Nueva contraseña (déjala vacía para no cambiarla)' : 'Contraseña (mín. 4 caracteres)'"></span>
+                      <input type="password" x-model="form.password" :required="!form.id" minlength="4" maxlength="72" autocomplete="new-password">
                     </label>
                   </div>
                   <label class="check" x-show="form.id"><input type="checkbox" x-model="form.is_active"> Activo</label>

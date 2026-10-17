@@ -36,8 +36,8 @@ def main() -> None:
 
         if not args.email or not args.password:
             parser.error("Indica --email y --password (o las variables ADMIN_EMAIL y ADMIN_PASSWORD)")
-        if not 8 <= len(args.password) <= 72:
-            parser.error("La contraseña debe tener entre 8 y 72 caracteres")
+        if not 4 <= len(args.password) <= 72:
+            parser.error("La contraseña debe tener entre 4 y 72 caracteres")
 
         email = args.email.strip().lower()
         user = db.scalar(select(User).where(User.email == email))

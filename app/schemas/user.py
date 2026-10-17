@@ -1,14 +1,25 @@
+import re
 from datetime import datetime
 from typing import Annotated
 
-from pydantic import AfterValidator, BaseModel, EmailStr, Field
+from pydantic import AfterValidator, BaseModel, Field
 
 from app.models.user import Role
 from app.schemas.common import ORMModel
 
-LowerEmail = Annotated[EmailStr, AfterValidator(str.lower)]
+
+def _normalize_username(value: str) -> str:
+    value = value.strip().lower()
+    if not re.fullmatch(r"[a-z0-9@._+-]{3,255}", value):
+        raise ValueError("El usuario debe tener al menos 3 caracteres: letras, números, @ . _ + -")
+    return value
+
+
+# Nombre de usuario para ingresar: un nombre simple ("admin", "ana.torres") o un email.
+# Se guarda en la columna `email` por compatibilidad.
+LowerEmail = Annotated[str, AfterValidator(_normalize_username)]
 # bcrypt solo usa los primeros 72 bytes de la contraseña.
-Password = Annotated[str, Field(min_length=8, max_length=72)]
+Password = Annotated[str, Field(min_length=4, max_length=72)]
 
 
 class Token(BaseModel):
