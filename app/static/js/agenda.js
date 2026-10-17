@@ -16,19 +16,127 @@ document.addEventListener("alpine:init", () => {
     slots: [],
     slotsLoading: false,
     saving: false,
+    // Calendario mensual
+    calMonth: "",
+    calCounts: {},
+    calOpen: true,
+    // Ganancias de la semana
+    week: [],
+    weekFor: null,
+    hoverBar: null,
 
     async init() {
       const app = Alpine.store("app");
       if (app.params.dia) this.day = app.params.dia;
+      this.calMonth = this.day.slice(0, 7);
+      this.calOpen = !app.isMobile;
       try {
         let employees = await API.get("/employees");
         if (app.user.role === "estilista") employees = employees.filter((e) => e.id === app.user.employee_id);
         this.employees = employees;
         this.mobileEmpId = employees[0]?.id ?? null;
-        await this.load();
+        await Promise.all([this.load(), this.loadCalendar(), this.loadWeek()]);
       } catch (e) {
         app.error(e);
       }
+    },
+
+    /** Cambia el día de la agenda y mantiene sincronizados calendario y gráfico. */
+    setDay(day) {
+      if (!day) return;
+      this.day = day;
+      if (day.slice(0, 7) !== this.calMonth) {
+        this.calMonth = day.slice(0, 7);
+        this.loadCalendar();
+      }
+      this.loadWeek();
+      this.load();
+    },
+
+    /* ---------- Calendario mensual ---------- */
+    async loadCalendar() {
+      try {
+        const rows = await API.get("/appointments/calendar", { month: this.calMonth });
+        this.calCounts = Object.fromEntries(rows.map((r) => [r.day, r.count]));
+      } catch (e) {
+        Alpine.store("app").error(e);
+      }
+    },
+
+    shiftMonth(n) {
+      const [y, m] = this.calMonth.split("-").map(Number);
+      const d = new Date(Date.UTC(y, m - 1 + n, 1));
+      this.calMonth = d.toISOString().slice(0, 7);
+      this.loadCalendar();
+    },
+
+    get calDays() {
+      const first = this.calMonth + "-01";
+      const [y, m] = this.calMonth.split("-").map(Number);
+      const last = new Date(Date.UTC(y, m, 0)).toISOString().slice(0, 10);
+      const start = Fmt.addDays(first, -Fmt.weekday(first));
+      const end = Fmt.addDays(last, 6 - Fmt.weekday(last));
+      const days = [];
+      for (let d = start; d <= end; d = Fmt.addDays(d, 1)) {
+        days.push({ day: d, num: Number(d.slice(8)), inMonth: d.slice(0, 7) === this.calMonth, count: this.calCounts[d] || 0 });
+      }
+      return days;
+    },
+
+    get calMonthTotal() {
+      return Object.values(this.calCounts).reduce((s, n) => s + n, 0);
+    },
+
+    /* ---------- Ganancias de la semana (solo admin y recepción) ---------- */
+    get weekStart() {
+      return Fmt.addDays(this.day, -Fmt.weekday(this.day));
+    },
+
+    async loadWeek(force = false) {
+      if (!Alpine.store("app").isStaff) return;
+      const start = this.weekStart;
+      if (!force && start === this.weekFor) return;
+      this.weekFor = start;
+      try {
+        this.week = await API.get("/reports/daily-sales", { date_from: start, date_to: Fmt.addDays(start, 6) });
+      } catch (e) {
+        Alpine.store("app").error(e);
+      }
+    },
+
+    get weekTotal() {
+      return this.week.reduce((s, d) => s + Number(d.total), 0);
+    },
+
+    get weekCount() {
+      return this.week.reduce((s, d) => s + d.count, 0);
+    },
+
+    get weekBest() {
+      return this.week.reduce((best, d) => (Number(d.total) > Number(best?.total ?? 0) ? d : best), null);
+    },
+
+    /** Máximo "redondo" del eje para que las marcas sean números limpios. */
+    get weekAxisMax() {
+      const max = Math.max(0, ...this.week.map((d) => Number(d.total)));
+      if (max === 0) return 100;
+      const magnitude = 10 ** Math.floor(Math.log10(max));
+      const step = [1, 2, 2.5, 5, 10].find((s) => s * magnitude >= max);
+      return step * magnitude;
+    },
+
+    get weekTicks() {
+      const max = this.weekAxisMax;
+      return [max, max / 2, 0];
+    },
+
+    barHeight(d) {
+      return `${(Number(d.total) / this.weekAxisMax) * 100}%`;
+    },
+
+    get weekRangeLabel() {
+      const end = Fmt.addDays(this.weekStart, 6);
+      return `${Fmt.plainDate(this.weekStart).replace(/ \d{4}$/, "")} – ${Fmt.plainDate(end)}`;
     },
 
     async load() {
@@ -43,8 +151,7 @@ document.addEventListener("alpine:init", () => {
     },
 
     shift(n) {
-      this.day = n === 0 ? Fmt.today() : Fmt.addDays(this.day, n);
-      this.load();
+      this.setDay(n === 0 ? Fmt.today() : Fmt.addDays(this.day, n));
     },
 
     /* ---------- Cuadrícula ---------- */
@@ -238,8 +345,8 @@ document.addEventListener("alpine:init", () => {
         else await API.post("/appointments", body);
         app.toast(f.id ? "Cita actualizada" : "Cita agendada");
         this.form = null;
-        this.day = f.date;
-        await this.load();
+        this.setDay(f.date);
+        this.loadCalendar();
       } catch (e) {
         app.error(e);
       } finally {
@@ -282,6 +389,7 @@ document.addEventListener("alpine:init", () => {
         this.appointments = this.appointments.map((a) => (a.id === updated.id ? updated : a));
         this.detail = updated;
         this.cancelMode = null;
+        this.loadCalendar();
         Alpine.store("app").toast(`Cita: ${STATUS[status].toLowerCase()}`);
       } catch (e) {
         Alpine.store("app").error(e);

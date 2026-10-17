@@ -1,3 +1,5 @@
+from datetime import timedelta
+
 from tests.conftest import book, tomorrow_at
 
 
@@ -131,3 +133,39 @@ def test_cash_close_with_movements_and_void(client, admin, reception, salon):
     sale_id = client.get("/api/sales", headers=admin).json()[0]["id"]
     resp = client.post(f"/api/sales/{sale_id}/void", json={"reason": "tarde"}, headers=admin)
     assert resp.status_code == 409
+
+
+def test_daily_sales_report(client, admin, reception, salon):
+    from app.core.timeutils import now
+
+    open_cash(client, reception)
+    for amount in ("30.00", "45.50"):
+        client.post(
+            "/api/sales",
+            json={
+                "items": [{"service_id": salon["corte"]["id"], "unit_price": amount}],
+                "payments": [{"method": "efectivo", "amount": amount}],
+            },
+            headers=reception,
+        )
+    today = now().date()
+    resp = client.get(
+        "/api/reports/daily-sales",
+        params={"date_from": (today - timedelta(days=6)).isoformat(), "date_to": today.isoformat()},
+        headers=reception,
+    )
+    assert resp.status_code == 200, resp.text
+    days = resp.json()
+    assert len(days) == 7  # incluye días sin ventas
+    assert days[-1] == {"day": today.isoformat(), "total": "75.50", "count": 2}
+    assert all(d["total"] == "0.00" for d in days[:-1])
+
+
+def test_daily_sales_forbidden_for_stylist(client, db):
+    from app.models import Role
+    from tests.conftest import create_user, login
+
+    create_user(db, Role.ESTILISTA, "ana@example.com")
+    headers = login(client, "ana@example.com")
+    resp = client.get("/api/reports/daily-sales", params={"date_from": "2026-01-01", "date_to": "2026-01-07"}, headers=headers)
+    assert resp.status_code == 403

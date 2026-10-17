@@ -154,3 +154,17 @@ def test_database_rejects_overlap_even_without_api(db, client, reception, salon)
     with pytest.raises(IntegrityError):
         db.commit()
     db.rollback()
+
+
+def test_month_calendar_counts(client, reception, salon):
+    book(client, reception, salon, tomorrow_at(10))
+    book(client, reception, salon, tomorrow_at(12))
+    cancelled = book(client, reception, salon, tomorrow_at(15)).json()
+    client.post(f"/api/appointments/{cancelled['id']}/status", json={"status": "cancelada"}, headers=reception)
+
+    day = now().date() + timedelta(days=1)
+    resp = client.get("/api/appointments/calendar", params={"month": day.strftime("%Y-%m")}, headers=reception)
+    assert resp.status_code == 200, resp.text
+    assert {"day": day.isoformat(), "count": 2} in resp.json()  # la cancelada no cuenta
+
+    assert client.get("/api/appointments/calendar", params={"month": "2026-13"}, headers=reception).status_code == 422

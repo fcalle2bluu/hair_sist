@@ -1,12 +1,18 @@
 from datetime import date, time, timedelta
 
 from fastapi import APIRouter, HTTPException, Query, status
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session, selectinload
 
 from app.api.deps import CurrentUser, DbSession, StaffUser, get_or_404
+from app.core.config import settings
 from app.core.timeutils import local_datetime, localize, now
-from app.models.appointment import Appointment, AppointmentService, AppointmentStatus
+from app.models.appointment import (
+    RELEASED_STATUSES,
+    Appointment,
+    AppointmentService,
+    AppointmentStatus,
+)
 from app.models.client import Client
 from app.models.employee import Employee
 from app.models.service import Service
@@ -18,6 +24,7 @@ from app.schemas.appointment import (
     AppointmentUpdate,
     AvailabilitySlots,
 )
+from app.schemas.report import DayCount
 from app.services.scheduling import (
     EDITABLE_STATUSES,
     available_slots,
@@ -132,6 +139,39 @@ def availability(
         duration_minutes=duration,
         slots=available_slots(db, employee, day, duration),
     )
+
+
+@router.get("/calendar", response_model=list[DayCount])
+def calendar(
+    db: DbSession,
+    user: CurrentUser,
+    month: str = Query(pattern=r"^\d{4}-\d{2}$", description="Mes en formato AAAA-MM"),
+    employee_id: int | None = None,
+):
+    """Cantidad de citas activas por día del mes (para el calendario mensual)."""
+    year, mon = map(int, month.split("-"))
+    if not 1 <= mon <= 12:
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, "Mes inválido")
+    first = date(year, mon, 1)
+    next_month = date(year + mon // 12, mon % 12 + 1, 1)
+
+    local_day = func.date(func.timezone(settings.timezone, Appointment.start_at))
+    stmt = (
+        select(local_day, func.count(Appointment.id))
+        .where(
+            Appointment.start_at >= local_datetime(first, time.min),
+            Appointment.start_at < local_datetime(next_month, time.min),
+            Appointment.status.not_in(RELEASED_STATUSES),
+        )
+        .group_by(local_day)
+        .order_by(local_day)
+    )
+    own_id = _stylist_employee_id(user)
+    if own_id is not None:
+        employee_id = own_id
+    if employee_id is not None:
+        stmt = stmt.where(Appointment.employee_id == employee_id)
+    return [DayCount(day=day, count=count) for day, count in db.execute(stmt)]
 
 
 @router.post("", response_model=AppointmentRead, status_code=status.HTTP_201_CREATED)

@@ -5,7 +5,17 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
-from app.api.routes import appointments, auth, cash, clients, employees, sales, services, users
+from app.api.routes import (
+    appointments,
+    auth,
+    cash,
+    clients,
+    employees,
+    reports,
+    sales,
+    services,
+    users,
+)
 from app.core.config import settings
 
 STATIC_DIR = Path(__file__).parent / "static"
@@ -21,7 +31,7 @@ app.add_middleware(
 )
 
 api = APIRouter(prefix="/api")
-for module in (auth, users, clients, services, employees, appointments, sales, cash):
+for module in (auth, users, clients, services, employees, appointments, sales, cash, reports):
     api.include_router(module.router)
 
 

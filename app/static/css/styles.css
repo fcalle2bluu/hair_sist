@@ -262,6 +262,77 @@ tr.selected td { background: var(--primary-soft); }
 .ticket hr { border: 0; border-top: 1px dashed #999; margin: 8px 0; }
 .ticket .line { display: flex; justify-content: space-between; gap: 8px; }
 
+/* ---------- Ganancias de la semana (barras verticales) ---------- */
+.sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
+.earnings { padding: 16px 18px 12px; margin-bottom: 16px; }
+.earnings-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; margin-bottom: 12px; }
+.earnings-total { font-size: 26px; font-weight: 700; margin: 2px 0; font-variant-numeric: tabular-nums; }
+.bars-wrap { display: flex; gap: 8px; }
+.bars-axis {
+  width: 38px; flex-shrink: 0; height: 150px; display: flex; flex-direction: column; justify-content: space-between;
+  font-size: 11px; color: var(--muted); text-align: right; font-variant-numeric: tabular-nums;
+}
+.bars-axis span { line-height: 1; transform: translateY(-50%); }
+.bars-axis span:first-child { transform: none; }
+.bars-axis span:last-child { transform: translateY(0); }
+.bars { position: relative; flex: 1; display: flex; min-width: 0; }
+.bars-grid { position: absolute; left: 0; right: 0; top: 0; height: 150px; display: flex; flex-direction: column; justify-content: space-between; pointer-events: none; }
+.bars-grid span { border-top: 1px solid var(--border); }
+.bar-col {
+  flex: 1; min-width: 0; display: flex; flex-direction: column; align-items: center; gap: 2px;
+  background: none; border: 0; padding: 0; font: inherit; color: inherit; cursor: pointer; border-radius: 8px;
+}
+.bar-col:hover .bar-area, .bar-col:focus-visible .bar-area { background: var(--surface-2); }
+.bar-col:focus-visible { outline: 2px solid var(--primary-soft); }
+.bar-area { position: relative; width: 100%; height: 150px; border-radius: 6px; }
+.bar {
+  position: absolute; bottom: 0; left: 50%; transform: translateX(-50%);
+  width: 24px; max-width: 70%; min-height: 2px; background: var(--primary); border-radius: 4px 4px 0 0;
+  transition: height .35s ease;
+}
+.bar.is-zero { background: var(--border-strong); }
+.bar-col.selected .bar { box-shadow: 0 0 0 2px var(--surface), 0 0 0 4px var(--primary-soft); }
+.bar-value { position: absolute; left: 0; right: 0; text-align: center; font-size: 11px; font-weight: 600; color: var(--text); font-variant-numeric: tabular-nums; }
+.bar-tip {
+  position: absolute; bottom: calc(100% - 20px); left: 50%; transform: translateX(-50%); z-index: 5;
+  display: flex; flex-direction: column; align-items: center; gap: 1px; white-space: nowrap;
+  background: var(--text); color: #fff; font-size: 12px; padding: 6px 10px; border-radius: 8px; box-shadow: var(--shadow-lg); pointer-events: none;
+}
+.bar-tip .muted { color: #d9cdd2; }
+.bar-label { font-size: 12px; color: var(--muted); margin-top: 4px; }
+.bar-label.today { color: var(--text); font-weight: 700; }
+.bar-date { font-size: 11px; color: var(--muted); }
+.bar-col.selected .bar-label, .bar-col.selected .bar-date { color: var(--primary); font-weight: 700; }
+
+/* ---------- Calendario mensual + agenda ---------- */
+.agenda-layout { display: grid; grid-template-columns: 280px minmax(0, 1fr); gap: 16px; align-items: start; }
+.calendar { padding: 12px; position: sticky; top: 16px; }
+.cal-head { display: flex; align-items: center; justify-content: space-between; gap: 6px; margin-bottom: 8px; }
+.cal-title { border: 0; background: none; font: inherit; font-weight: 600; font-size: 15px; cursor: pointer; display: flex; align-items: center; gap: 6px; color: var(--text); }
+.cal-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 2px; }
+.cal-weekdays span { text-align: center; font-size: 11px; color: var(--muted); font-weight: 600; padding: 4px 0; }
+.cal-day {
+  position: relative; aspect-ratio: 1; border: 0; border-radius: 8px; background: none; font: inherit; font-size: 13px;
+  cursor: pointer; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 1px; color: var(--text);
+}
+.cal-day:hover { background: var(--surface-2); }
+.cal-day.out { color: #c4b8bc; }
+.cal-day.today { box-shadow: inset 0 0 0 1.5px var(--primary); font-weight: 700; }
+.cal-day.selected { background: var(--primary); color: #fff; font-weight: 700; }
+.cal-count {
+  min-width: 16px; height: 16px; padding: 0 4px; border-radius: 999px; font-size: 10px; font-weight: 700; line-height: 16px;
+  background: var(--primary-soft); color: var(--primary);
+}
+.cal-day.selected .cal-count { background: rgba(255, 255, 255, .25); color: #fff; }
+.cal-foot { display: flex; align-items: center; justify-content: space-between; margin-top: 8px; padding-top: 8px; border-top: 1px solid var(--border); }
+.only-mobile-inline { display: none; }
+
+@media (max-width: 1100px) {
+  .agenda-layout { grid-template-columns: 1fr; }
+  .calendar { position: static; }
+  .calendar .cal-grid, .calendar .cal-foot { max-width: 420px; margin-left: auto; margin-right: auto; }
+}
+
 /* ---------- Elementos solo para celular ---------- */
 .bottom-nav, .only-mobile { display: none; }
 .user-menu {
@@ -286,6 +357,14 @@ tr.selected td { background: var(--primary-soft); }
   .only-mobile { display: block; }
   .btn.only-mobile { display: inline-flex; }
   .chips.only-mobile, .row.only-mobile { display: flex; }
+  .only-mobile-inline { display: inline; }
+  .earnings { padding: 14px 12px 10px; }
+  .earnings-total { font-size: 22px; }
+  .bars-axis { width: 30px; }
+  .bar { width: 18px; }
+  .calendar { padding: 10px; }
+  .cal-head { margin-bottom: 0; }
+  .calendar [x-show] .cal-grid:first-child { margin-top: 8px; }
 
   /* Estructura: barra superior + navegación inferior tipo app */
   .layout { flex-direction: column; }

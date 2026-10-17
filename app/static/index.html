@@ -123,7 +123,6 @@
               <button class="btn btn-icon" @click="shift(-1)" title="Día anterior">‹</button>
               <button class="btn" @click="shift(0)">Hoy</button>
               <button class="btn btn-icon" @click="shift(1)" title="Día siguiente">›</button>
-              <input type="date" x-model="day" @change="load()" style="width:auto">
               <span class="agenda-date" x-text="Fmt.dayLong(day)"></span>
             </div>
             <button x-show="$store.app.isStaff" class="btn btn-primary fab" @click="openNew()" aria-label="Nueva cita">
@@ -131,6 +130,93 @@
             </button>
           </div>
 
+          <!-- Ganancias de la semana (admin y recepción) -->
+          <template x-if="$store.app.isStaff">
+            <div class="card earnings">
+              <div class="earnings-head">
+                <div>
+                  <div class="stat-label">Ganancias de la semana</div>
+                  <div class="earnings-total" x-text="Fmt.money(weekTotal)"></div>
+                  <div class="muted small" x-text="`${weekCount} ${weekCount === 1 ? 'venta' : 'ventas'} · ${weekRangeLabel}`"></div>
+                </div>
+                <div class="row">
+                  <button class="btn btn-sm btn-icon" @click="setDay(Fmt.addDays(day, -7))" title="Semana anterior">‹</button>
+                  <button class="btn btn-sm btn-icon" @click="setDay(Fmt.addDays(day, 7))" title="Semana siguiente">›</button>
+                </div>
+              </div>
+              <div class="bars-wrap">
+                <div class="bars-axis" aria-hidden="true">
+                  <template x-for="t in weekTicks" :key="t">
+                    <span x-text="Fmt.compact(t)"></span>
+                  </template>
+                </div>
+                <div class="bars" role="img" :aria-label="`Ganancias por día: ${week.map((d, i) => WEEKDAYS[i] + ' ' + Fmt.money(d.total)).join(', ')}`">
+                  <div class="bars-grid" aria-hidden="true"><span></span><span></span><span></span></div>
+                  <template x-for="(d, i) in week" :key="d.day">
+                    <button class="bar-col" :class="{ selected: d.day === day }" @click="setDay(d.day)"
+                            @mouseenter="hoverBar = d.day" @mouseleave="hoverBar = null" @focus="hoverBar = d.day" @blur="hoverBar = null"
+                            :aria-label="`${Fmt.dayLong(d.day)}: ${Fmt.money(d.total)}, ${d.count} ventas`">
+                      <div class="bar-area">
+                        <div class="bar" :class="{ 'is-zero': Number(d.total) === 0 }" :style="`height:${barHeight(d)}`"></div>
+                        <span class="bar-value" x-show="weekBest && d.day === weekBest.day && hoverBar !== d.day"
+                              :style="`bottom:calc(${barHeight(d)} + 4px)`" x-text="Fmt.compact(d.total)"></span>
+                        <div class="bar-tip" x-show="hoverBar === d.day" x-transition.opacity>
+                          <strong x-text="Fmt.dayLong(d.day).split(',')[0] + ' ' + Number(d.day.slice(8))"></strong>
+                          <span x-text="Fmt.money(d.total)"></span>
+                          <span class="muted" x-text="`${d.count} ${d.count === 1 ? 'venta' : 'ventas'}`"></span>
+                        </div>
+                      </div>
+                      <span class="bar-label" :class="{ today: d.day === Fmt.today() }" x-text="WEEKDAYS[i].slice(0, 3)"></span>
+                      <span class="bar-date" x-text="Number(d.day.slice(8))"></span>
+                    </button>
+                  </template>
+                </div>
+              </div>
+              <table class="sr-only">
+                <caption>Ganancias por día de la semana</caption>
+                <thead><tr><th>Día</th><th>Total</th><th>Ventas</th></tr></thead>
+                <tbody>
+                  <template x-for="d in week" :key="d.day">
+                    <tr><td x-text="Fmt.dayLong(d.day)"></td><td x-text="Fmt.money(d.total)"></td><td x-text="d.count"></td></tr>
+                  </template>
+                </tbody>
+              </table>
+            </div>
+          </template>
+
+          <div class="agenda-layout">
+            <!-- Calendario mensual -->
+            <aside class="card calendar">
+              <div class="cal-head">
+                <button class="btn btn-sm btn-icon" @click="shiftMonth(-1)" title="Mes anterior">‹</button>
+                <button class="cal-title" @click="calOpen = !calOpen">
+                  <span x-text="Fmt.monthLabel(calMonth)"></span>
+                  <span class="only-mobile-inline muted" x-text="calOpen ? '▴' : '▾'"></span>
+                </button>
+                <button class="btn btn-sm btn-icon" @click="shiftMonth(1)" title="Mes siguiente">›</button>
+              </div>
+              <div x-show="calOpen || !$store.app.isMobile">
+                <div class="cal-grid cal-weekdays">
+                  <template x-for="w in WEEKDAYS_SHORT" :key="w"><span x-text="w"></span></template>
+                </div>
+                <div class="cal-grid">
+                  <template x-for="c in calDays" :key="c.day">
+                    <button class="cal-day" :class="{ out: !c.inMonth, today: c.day === Fmt.today(), selected: c.day === day }"
+                            @click="setDay(c.day); if ($store.app.isMobile) calOpen = false"
+                            :aria-label="`${Fmt.dayLong(c.day)}: ${c.count} citas`">
+                      <span x-text="c.num"></span>
+                      <span class="cal-count" x-show="c.count" x-text="c.count"></span>
+                    </button>
+                  </template>
+                </div>
+                <div class="cal-foot">
+                  <span class="muted small" x-text="`${calMonthTotal} ${calMonthTotal === 1 ? 'cita' : 'citas'} en el mes`"></span>
+                  <button class="btn btn-sm btn-ghost" @click="setDay(Fmt.today())">Ir a hoy</button>
+                </div>
+              </div>
+            </aside>
+
+            <div class="agenda-main">
           <div class="legend" style="margin-bottom:10px">
             <span x-show="$store.app.isStaff">Haz clic en un espacio libre para agendar.</span>
             <span>Las franjas rayadas están fuera del horario del estilista.</span>
@@ -180,6 +266,8 @@
                   </div>
                 </div>
               </template>
+            </div>
+          </div>
             </div>
           </div>
 

@@ -118,6 +118,17 @@ const Fmt = {
     if (!day) return "";
     return new Intl.DateTimeFormat("es", { timeZone: "UTC", day: "numeric", month: "short", year: "numeric" }).format(new Date(day + "T12:00:00Z"));
   },
+  /** "2026-10" → "Octubre 2026" */
+  monthLabel(ym) {
+    const text = new Intl.DateTimeFormat("es", { timeZone: "UTC", month: "long", year: "numeric" }).format(new Date(ym + "-15T12:00:00Z"));
+    return text.charAt(0).toUpperCase() + text.slice(1).replace(" de ", " ");
+  },
+  /** Montos compactos para ejes: 0, 500, 1,5K, 12K */
+  compact(value) {
+    const n = Number(value || 0);
+    if (n >= 1000) return `${(n / 1000).toLocaleString("es", { maximumFractionDigits: n >= 10000 ? 0 : 1 })}K`;
+    return n.toLocaleString("es", { maximumFractionDigits: 0 });
+  },
   today() {
     return new Intl.DateTimeFormat("en-CA", { timeZone: this.tz }).format(new Date());
   },
